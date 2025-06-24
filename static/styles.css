@@ -1,0 +1,64 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+.session-header {
+    border-radius: 5px 5px 0 0;
+}
+
+.editor-container {
+    position: relative;
+    height: calc(100vh - 180px);
+}
+
+#editor {
+    width: 100%;
+    height: 100%;
+    font-family: 'Fira Code', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 15px;
+    border: none;
+    resize: none;
+    outline: none;
+    tab-size: 4;
+    background-color: #f8f9fa;
+}
+
+.participant-cursor {
+    position: absolute;
+    width: 2px;
+    height: 18px;
+    z-index: 10;
+}
+
+.participant-label {
+    position: absolute;
+    top: -20px;
+    left: 0;
+    padding: 2px 5px;
+    font-size: 12px;
+    border-radius: 3px;
+    white-space: nowrap;
+    z-index: 11;
+    color: white;
+}
+
+.history-item {
+    cursor: pointer;
+    border-left: 3px solid transparent;
+}
+
+.history-item:hover {
+    background-color: #f8f9fa;
+}
+
+.history-item.active {
+    border-left-color: #0d6efd;
+    background-color: #f8f9fa;
+}
+
+.toast-container {
+    z-index: 1100;
+}

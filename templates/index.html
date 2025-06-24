@@ -1,0 +1,547 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    .editor-container {
+        position: relative;
+        height: calc(100vh - 180px);
+    }
+    
+    #editor {
+        width: 100%;
+        height: 100%;
+        font-family: 'Fira Code', monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        padding: 15px;
+        border: none;
+        resize: none;
+        outline: none;
+        tab-size: 4;
+        background-color: #f8f9fa;
+    }
+    
+    .participant-cursor {
+        position: absolute;
+        width: 2px;
+        height: 18px;
+        z-index: 10;
+    }
+    
+    .participant-label {
+        position: absolute;
+        top: -20px;
+        left: 0;
+        padding: 2px 5px;
+        font-size: 12px;
+        border-radius: 3px;
+        white-space: nowrap;
+        z-index: 11;
+        color: white;
+    }
+    
+    .history-item {
+        cursor: pointer;
+        border-left: 3px solid transparent;
+    }
+    
+    .history-item:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .history-item.active {
+        border-left-color: #0d6efd;
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="session-header d-flex justify-content-between align-items-center bg-dark text-white p-3 rounded-top">
+        <div>
+            <h5 class="mb-0">Collaborative Code Editor</h5>
+            <small class="text-muted">Logged in as: <strong>{{ current_user.username }}</strong></small>
+        </div>
+        <div>
+            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-light">
+                <i class="bi bi-box-arrow-right"></i> Logout
+            </a>
+        </div>
+    </div>
+    
+    <div class="card mt-3">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs" id="editorTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="code-tab" data-bs-toggle="tab" data-bs-target="#code" type="button" role="tab">
+                        <i class="bi bi-code-square"></i> Editor
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="output-tab" data-bs-toggle="tab" data-bs-target="#output" type="button" role="tab">
+                        <i class="bi bi-terminal"></i> Output
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">
+                        <i class="bi bi-clock-history"></i> History
+                    </button>
+                </li>
+            </ul>
+        </div>
+        <div class="tab-content" id="editorTabsContent">
+            <div class="tab-pane fade show active" id="code" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-3 p-3">
+                    <div class="d-flex align-items-center">
+                        <select id="language" class="form-select form-select-sm me-2" style="width: 120px;">
+                            <option value="python">Python</option>
+                            <option value="cpp">C++</option>
+                            <option value="csharp">C#</option>
+                            <option value="java">Java</option>
+                            <option value="javascript">JavaScript</option>
+                        </select>
+                        <button id="run-btn" class="btn btn-sm btn-success me-2">
+                            <i class="bi bi-play-fill"></i> Run
+                        </button>
+                        <button id="format-btn" class="btn btn-sm btn-outline-secondary me-2">
+                            <i class="bi bi-braces"></i> Format
+                        </button>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <div id="participants" class="me-3 d-flex align-items-center">
+                            <span class="me-2">Participants:</span>
+                            <div id="participants-list" class="d-flex"></div>
+                        </div>
+                        <div class="input-group input-group-sm" style="width: 300px;">
+                            <input type="text" id="session-link" class="form-control" 
+                                   value="{{ url_for('join_session', session_id=session_id, _external=True) }}" readonly>
+                            <button id="copy-link-btn" class="btn btn-outline-secondary" type="button">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="editor-container position-relative">
+                    <textarea id="editor" spellcheck="false"># Write your code here</textarea>
+                    <div id="editor-cursors"></div>
+                </div>
+            </div>
+            
+            <div class="tab-pane fade" id="output" role="tabpanel">
+                <div id="output-content" class="p-3"></div>
+            </div>
+            
+            <div class="tab-pane fade" id="history" role="tabpanel">
+                <div id="history-content" class="p-3">
+                    <div class="list-group" id="history-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="copy-toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-body d-flex justify-content-between align-items-center">
+            <span>Link copied to clipboard!</span>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Инициализация редактора
+    const editor = document.getElementById('editor');
+    const output = document.getElementById('output-content');
+    const languageSelect = document.getElementById('language');
+    const runBtn = document.getElementById('run-btn');
+    const formatBtn = document.getElementById('format-btn');
+    const copyLinkBtn = document.getElementById('copy-link-btn');
+    const sessionLink = document.getElementById('session-link');
+    const participantsList = document.getElementById('participants-list');
+    const editorCursors = document.getElementById('editor-cursors');
+    const historyList = document.getElementById('history-list');
+    
+    // WebSocket соединение
+    let socket;
+    let userId = '{{ current_user.id }}';
+    let sessionId = '{{ session_id }}';
+    let isOwner = false;
+    let participants = {};
+    let cursorPositions = {};
+    let connectionId = null;
+    
+    // Инициализация WebSocket
+    function initWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        socket = new WebSocket(`${protocol}//${host}/ws/${sessionId}`);
+        
+        socket.onopen = () => {
+            console.log('WebSocket connected');
+            connectionId = uuidv4();
+        };
+        
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            console.log('WebSocket message:', data);
+            
+            switch(data.type) {
+                case 'init':
+                    handleInit(data);
+                    break;
+                case 'code_update':
+                    handleCodeUpdate(data);
+                    break;
+                case 'language_update':
+                    handleLanguageUpdate(data);
+                    break;
+                case 'participant_joined':
+                    handleParticipantJoined(data);
+                    break;
+                case 'participant_left':
+                    handleParticipantLeft(data);
+                    break;
+                case 'cursor_update':
+                    handleCursorUpdate(data);
+                    break;
+                case 'history_response':
+                    handleHistoryResponse(data);
+                    break;
+            }
+        };
+        
+        socket.onclose = () => {
+            console.log('WebSocket disconnected');
+            setTimeout(initWebSocket, 1000);
+        };
+    }
+    
+    function uuidv4() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+    
+    function handleInit(data) {
+        editor.value = data.code || '';
+        languageSelect.value = data.language || 'python';
+        participants = data.participants || {};
+        isOwner = data.isOwner;
+        
+        updateParticipantsDisplay();
+        loadHistory(data.history || []);
+    }
+    
+    function handleCodeUpdate(data) {
+        if (data.userId !== userId) {
+            editor.value = data.code;
+        }
+    }
+    
+    function handleLanguageUpdate(data) {
+        if (data.userId !== userId) {
+            languageSelect.value = data.language;
+        }
+    }
+    
+    function handleParticipantJoined(data) {
+        participants[data.userId] = data.participant;
+        updateParticipantsDisplay();
+    }
+    
+    function handleParticipantLeft(data) {
+        delete participants[data.userId];
+        updateParticipantsDisplay();
+        
+        // Удаление курсора
+        if (cursorPositions[data.userId]) {
+            const cursorElement = document.getElementById(`cursor-${data.userId}`);
+            if (cursorElement) {
+                cursorElement.remove();
+            }
+            delete cursorPositions[data.userId];
+        }
+    }
+    
+    function handleCursorUpdate(data) {
+        const position = data.position;
+        const participant = participants[data.userId];
+        
+        if (!participant) return;
+        
+        cursorPositions[data.userId] = position;
+        
+        // Обновление или создание курсора
+        let cursorElement = document.getElementById(`cursor-${data.userId}`);
+        if (!cursorElement) {
+            cursorElement = document.createElement('div');
+            cursorElement.id = `cursor-${data.userId}`;
+            cursorElement.className = 'participant-cursor';
+            cursorElement.style.backgroundColor = participant.color;
+            
+            const labelElement = document.createElement('div');
+            labelElement.className = 'participant-label';
+            labelElement.style.backgroundColor = participant.color;
+            labelElement.textContent = participant.name;
+            
+            cursorElement.appendChild(labelElement);
+            editorCursors.appendChild(cursorElement);
+        }
+        
+        // Позиционирование курсора
+        const text = editor.value;
+        const lines = text.split('\n');
+        let linePos = 0;
+        let lineNum = 0;
+        let found = false;
+        
+        for (; lineNum < lines.length; lineNum++) {
+            if (position.row === lineNum) {
+                linePos = position.column;
+                found = true;
+                break;
+            }
+        }
+        
+        if (found) {
+            const lineHeight = 18; // Высота строки
+            const charWidth = 8;  // Ширина символа
+            
+            cursorElement.style.top = `${lineNum * lineHeight + 15}px`;
+            cursorElement.style.left = `${linePos * charWidth + 15}px`;
+        }
+    }
+    
+    function handleHistoryResponse(data) {
+        loadHistory(data.history);
+    }
+    
+    function updateParticipantsDisplay() {
+        participantsList.innerHTML = '';
+        
+        Object.keys(participants).forEach(id => {
+            const participant = participants[id];
+            const badge = document.createElement('span');
+            badge.className = 'badge rounded-pill me-1';
+            badge.style.backgroundColor = participant.color;
+            badge.textContent = participant.name;
+            participantsList.appendChild(badge);
+        });
+    }
+    
+    function loadHistory(history) {
+        historyList.innerHTML = '';
+        
+        history.reverse().forEach((item, index) => {
+            const historyItem = document.createElement('button');
+            historyItem.className = 'list-group-item list-group-item-action history-item';
+            
+            const date = new Date(item.timestamp);
+            const timeString = date.toLocaleTimeString();
+            
+            if (item.action === 'execution') {
+                historyItem.innerHTML = `
+                    <div class="d-flex justify-content-between">
+                        <span><i class="bi bi-play-fill me-2"></i>Execution (${item.language})</span>
+                        <small class="text-muted">${timeString}</small>
+                    </div>
+                    <small class="text-muted">${participants[item.userId]?.name || 'Unknown'}</small>
+                `;
+            } else {
+                historyItem.innerHTML = `
+                    <div class="d-flex justify-content-between">
+                        <span><i class="bi bi-pencil me-2"></i>Code change</span>
+                        <small class="text-muted">${timeString}</small>
+                    </div>
+                    <small class="text-muted">${participants[item.userId]?.name || 'Unknown'}</small>
+                `;
+            }
+            
+            historyItem.addEventListener('click', () => {
+                if (item.code) {
+                    editor.value = item.code;
+                }
+                
+                // Подсветка выбранного элемента
+                document.querySelectorAll('.history-item').forEach(el => {
+                    el.classList.remove('active');
+                });
+                historyItem.classList.add('active');
+            });
+            
+            historyList.appendChild(historyItem);
+        });
+    }
+    
+    // Обработчики событий редактора
+    editor.addEventListener('input', () => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                type: 'code_change',
+                code: editor.value,
+                userId: userId
+            }));
+        }
+    });
+    
+    editor.addEventListener('keyup', () => {
+        updateCursorPosition();
+    });
+    
+    editor.addEventListener('click', () => {
+        updateCursorPosition();
+    });
+    
+    function updateCursorPosition() {
+        const cursorPos = editor.selectionStart;
+        const text = editor.value.substring(0, cursorPos);
+        const lines = text.split('\n');
+        const row = lines.length - 1;
+        const column = lines[row].length;
+        
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                type: 'cursor_update',
+                userId: userId,
+                position: { row, column }
+            }));
+        }
+    }
+    
+    languageSelect.addEventListener('change', () => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                type: 'language_change',
+                language: languageSelect.value,
+                userId: userId
+            }));
+        }
+    });
+    
+    // Запуск кода
+    runBtn.addEventListener('click', async () => {
+        const lang = languageSelect.value;
+        const code = editor.value;
+        
+        output.innerHTML = `
+            <div class="d-flex justify-content-center align-items-center" style="height: 100px;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+        
+        try {
+            const response = await fetch('/execute', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    language: lang,
+                    code: code,
+                    sessionId: sessionId
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.error) {
+                output.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill"></i> ${result.error}
+                    </div>
+                    ${result.output ? `<pre class="bg-light p-3">${result.output}</pre>` : ''}
+                `;
+            } else {
+                output.innerHTML = `
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill"></i> Execution successful!
+                    </div>
+                    <pre class="bg-light p-3">${result.output}</pre>
+                `;
+            }
+            
+            // Переключение на вкладку вывода
+            new bootstrap.Tab(document.getElementById('output-tab')).show();
+        } catch (err) {
+            output.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Connection error: ${err.message}
+                </div>
+            `;
+        }
+    });
+    
+    // Копирование ссылки на сессию
+    copyLinkBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(sessionLink.value);
+        const toast = new bootstrap.Toast(document.getElementById('copy-toast'));
+        toast.show();
+    });
+    
+    // Запрос истории изменений
+    function requestHistory() {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                type: 'history_request',
+                connectionId: connectionId
+            }));
+        }
+    }
+    
+    // Инициализация
+    initWebSocket();
+    
+    // Примеры кода для разных языков
+    const codeExamples = {
+        python: `# Simple Python program
+def greet(name):
+    print(f"Hello, {name}!")
+
+greet("World")`,
+        cpp: `// Simple C++ program
+#include <iostream>
+using namespace std;
+
+int main() {
+    cout << "Hello, World!" << endl;
+    return 0;
+}`,
+        csharp: `// Simple C# program
+using System;
+
+class Program {
+    static void Main() {
+        Console.WriteLine("Hello, World!");
+    }
+}`,
+        java: `// Simple Java program
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello, World!");
+    }
+}`,
+        javascript: `// Simple JavaScript program
+console.log("Hello, World!");`
+    };
+    
+    // Установка примера кода при смене языка
+    languageSelect.addEventListener('change', () => {
+        editor.value = codeExamples[languageSelect.value] || '';
+    });
+    
+    // Инициализация начального языка
+    editor.value = codeExamples[languageSelect.value];
+    
+    // Запрос истории при открытии вкладки
+    document.getElementById('history-tab').addEventListener('click', requestHistory);
+</script>
+{% endblock %}
