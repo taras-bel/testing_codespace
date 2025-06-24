@@ -24,7 +24,7 @@
             <ul class="navbar-nav ml-auto">
                 {% if current_user.is_authenticated %}
                 <li class="nav-item">
-                    <span class="nav-link">Привет, {{ current_user.id }}!</span>
+                    <span class="nav-link">Привет, {{ current_user.username }}!</span>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('logout') }}">Выйти</a>
@@ -32,6 +32,9 @@
                 {% else %}
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('login') }}">Войти</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('register') }}">Регистрация</a>
                 </li>
                 {% endif %}
             </ul>
@@ -46,11 +49,15 @@
                         <h3>Начать кодировать вместе!</h3>
                     </div>
                     <div class="card-body">
-                        {% if error_message %}
-                        <div class="alert alert-danger" role="alert">
-                            {{ error_message }}
-                        </div>
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}" role="alert">
+                                {{ message }}
+                            </div>
+                            {% endfor %}
                         {% endif %}
+                        {% endwith %}
 
                         <form action="{{ url_for('new_session') }}" method="POST" class="mb-4">
                             <div class="form-group">
