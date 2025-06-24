@@ -204,7 +204,8 @@ def new_session():
     owner_id = current_user.id if current_user.is_authenticated else None
     session_id_str = create_new_session_in_db(language, owner_id)
     
-    return redirect(url_for('code_editor', session_id=session_id_str))
+    # ИСПРАВЛЕНО: используем session_id_str=
+    return redirect(url_for('code_editor', session_id_str=session_id_str))
 
 @app.route('/session/<session_id_str>')
 @login_required
@@ -218,7 +219,7 @@ def code_editor(session_id_str):
     is_owner = current_user.is_authenticated and s.owner_id == current_user.id
     
     return render_template('editor.html', 
-                           session_id=session_id_str, 
+                           session_id=session_id_str, # Здесь передаем как session_id для использования в JS
                            initial_code=s.code, 
                            initial_language=s.language, 
                            initial_output=s.output, 
@@ -232,6 +233,7 @@ def join_session():
     session_id_str = request.form.get('session_id')
     s = get_session_from_db(session_id_str)
     if s:
+        # ИСПРАВЛЕНО: используем session_id_str=
         return redirect(url_for('code_editor', session_id_str=session_id_str))
     flash('Сессия с таким ID не найдена.', 'danger')
     return redirect(url_for('index'))
@@ -376,14 +378,17 @@ def handle_execute_code(data):
         
         final_output = output + (f"\n\nОшибка:\n{error}" if error else "")
 
-        s_in_thread = db.session.execute(db.select(CodeSession).filter_by(session_id_str=session_id_str)).scalar_one_or_none()
-        if s_in_thread: # Убедимся, что сессия все еще существует
-            s_in_thread.output = final_output
-            s_in_thread.last_active = datetime.utcnow()
-            db.session.commit() # Сохраняем изменения в базе данных
-            
-        socketio.emit('execution_result', {'output': final_output, 'session_id': session_id_str}, room=session_id_str)
-        print(f"Execution finished for session {session_id_str}. Output length: {len(final_output)}")
+        # Важно: В новом потоке нужно получить свежую сессию из БД
+        # или использовать app.app_context() для работы с db.session
+        with app.app_context(): 
+            s_in_thread = db.session.execute(db.select(CodeSession).filter_by(session_id_str=session_id_str)).scalar_one_or_none()
+            if s_in_thread: # Убедимся, что сессия все еще существует
+                s_in_thread.output = final_output
+                s_in_thread.last_active = datetime.utcnow()
+                db.session.commit() # Сохраняем изменения в базе данных
+                
+            socketio.emit('execution_result', {'output': final_output, 'session_id': session_id_str}, room=session_id_str)
+            print(f"Execution finished for session {session_id_str}. Output length: {len(final_output)}")
 
     threading.Thread(target=run_execution).start()
 
@@ -413,3 +418,4 @@ cleanup_thread.start()
 if __name__ == '__main__':
     print("Starting Flask-SocketIO server...")
     socketio.run(app, debug=True, allow_unsafe_werkzeug=True)
+
