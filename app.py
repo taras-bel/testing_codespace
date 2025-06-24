@@ -22,6 +22,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY') or 'dev-secret-key'
 sock = Sock(app)
 
+# --- FakeRedis Implementation ---
 class FakeRedis:
     def __init__(self):
         self.data = {}
@@ -73,6 +74,7 @@ class FakeRedis:
 
 redis_client = FakeRedis()
 
+# --- Flask-Login Setup ---
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -98,16 +100,17 @@ class User(UserMixin):
 def load_user(user_id):
     return User.get(user_id)
 
-@app.route('/')
-@login_required
-def index():
-    user_sessions = redis_client.keys(f'user_sessions:{current_user.id}:*')
-    if not user_sessions:
-        session_id = create_session(current_user.id)
-    else:
-        session_id = user_sessions[0].split(':')[-1]
-    
-    return render_template('index.html', session_id=session_id)
+# --- Session Management Helpers ---
+def get_session(session_id):
+    session_data = redis_client.hgetall(f'session:{session_id}')
+    if not session_data:
+        return None
+    session_data['participants'] = json.loads(session_data['participants'])
+    session_data['history'] = json.loads(session_data.get('history', '[]'))
+    return session_data
+
+def update_session(session_id, updates):
+    redis_client.hmset(f'session:{session_id}', updates)
 
 def create_session(owner_id):
     session_id = str(uuid.uuid4())
@@ -120,11 +123,32 @@ def create_session(owner_id):
             'name': redis_client.hget(f'user:{owner_id}', 'username'),
             'color': f'#{hash(owner_id) % 0xFFFFFF:06x}'
         }}),
-        'max_participants': 2,
+        'max_participants': 100, # Increased max participants
         'history': json.dumps([])
     })
     redis_client.set(f'user_sessions:{owner_id}:{session_id}', 'owner')
     return session_id
+
+# --- Routes ---
+@app.route('/')
+@login_required
+def index():
+    user_sessions = redis_client.keys(f'user_sessions:{current_user.id}:*')
+    session_id = None
+    if not user_sessions:
+        # If no active session, create one
+        session_id = create_session(current_user.id)
+        flash('New session created for you!', 'info')
+    else:
+        # Attempt to rejoin an existing session
+        # For simplicity, just pick the first one found.
+        # In a real app, you might list them or allow user to choose.
+        session_key = user_sessions[0]
+        session_id = session_key.split(':')[-1]
+        flash('Rejoining your active session!', 'info')
+        
+    return redirect(url_for('join_session', session_id=session_id))
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -133,7 +157,7 @@ def register():
         password = request.form['password']
         
         if redis_client.hexists('user_index', username):
-            flash('Username already exists')
+            flash('Имя пользователя уже существует. Пожалуйста, выберите другое.', 'danger')
             return redirect(url_for('register'))
             
         user_id = str(uuid.uuid4())
@@ -149,7 +173,7 @@ def register():
         
         user = User(user_id, username, password_hash)
         login_user(user)
-        flash('Registration successful')
+        flash('Регистрация прошла успешно!', 'success')
         return redirect(url_for('index'))
     
     return render_template('register.html')
@@ -162,16 +186,16 @@ def login():
         
         user_id = redis_client.hget('user_index', username)
         if not user_id:
-            flash('Invalid username')
+            flash('Неверное имя пользователя.', 'danger')
             return redirect(url_for('login'))
             
         user = User.get(user_id)
         if not user or not check_password_hash(user.password_hash, password):
-            flash('Invalid password')
+            flash('Неверный пароль.', 'danger')
             return redirect(url_for('login'))
             
         login_user(user)
-        flash('Login successful')
+        flash('Вход выполнен успешно!', 'success')
         return redirect(url_for('index'))
     
     return render_template('login.html')
@@ -180,7 +204,7 @@ def login():
 @login_required
 def logout():
     logout_user()
-    flash('You have been logged out')
+    flash('Вы вышли из системы.', 'info')
     return redirect(url_for('login'))
 
 @app.route('/session/<session_id>')
@@ -188,100 +212,125 @@ def logout():
 def join_session(session_id):
     session = get_session(session_id)
     if not session:
-        return render_template('error.html', error="Session not found"), 404
+        flash("Сессия не найдена.", 'danger')
+        return redirect(url_for('index'))
         
-    if len(session['participants']) >= session['max_participants']:
-        return render_template('error.html', error="Session is full"), 403
-        
-    if str(current_user.id) not in session['participants']:
+    user_id_str = str(current_user.id)
+    
+    if user_id_str not in session['participants']:
+        # Check if session is full, though with 100 participants it's less likely.
+        if len(session['participants']) >= session['max_participants']:
+            flash("Сессия заполнена. Невозможно присоединиться.", 'warning')
+            return redirect(url_for('index'))
+            
         participants = session['participants']
-        participants[str(current_user.id)] = {
+        participants[user_id_str] = {
             'name': current_user.username,
-            'color': f'#{hash(current_user.id) % 0xFFFFFF:06x}'
+            'color': f'#{hash(user_id_str) % 0xFFFFFF:06x}'
         }
         update_session(session_id, {
             'participants': json.dumps(participants)
         })
         redis_client.set(f'user_sessions:{current_user.id}:{session_id}', 'guest')
+        
+        # Broadcast that a new participant joined
+        broadcast(session_id, {
+            'type': 'participant_joined',
+            'userId': user_id_str,
+            'participant': participants[user_id_str]
+        })
     
     return render_template('index.html', session_id=session_id)
 
-def get_session(session_id):
-    session_data = redis_client.hgetall(f'session:{session_id}')
-    if not session_data:
-        return None
-        
-    session_data['participants'] = json.loads(session_data['participants'])
-    session_data['history'] = json.loads(session_data.get('history', '[]'))
-    return session_data
-
-def update_session(session_id, updates):
-    redis_client.hmset(f'session:{session_id}', updates)
-
+# --- WebSocket Handling ---
 active_connections = {}
 
 @sock.route('/ws/<session_id>')
 @login_required
 def websocket(ws, session_id):
+    user_id_str = str(current_user.id)
+    
     session = get_session(session_id)
-    if not session or str(current_user.id) not in session['participants']:
+    if not session or user_id_str not in session['participants']:
         ws.close()
         return
-    
+
+    # Generate a unique ID for this specific websocket connection
     connection_id = str(uuid.uuid4())
     active_connections[connection_id] = {
         'ws': ws,
         'session_id': session_id,
-        'user_id': str(current_user.id)
+        'user_id': user_id_str
     }
     
     try:
+        # Send initial state to the new client
         ws.send(json.dumps({
             'type': 'init',
             'code': session.get('code', ''),
             'language': session.get('language', 'python'),
             'participants': session['participants'],
-            'userId': str(current_user.id),
-            'isOwner': str(current_user.id) == session['owner_id'],
+            'userId': user_id_str,
+            'isOwner': user_id_str == session['owner_id'],
             'history': session['history']
         }))
         
+        # Keep connection open and listen for messages
         while True:
             message = ws.receive()
-            if message is None:
+            if message is None: # Client disconnected
                 break
                 
-            data = json.loads(message)
-            handle_ws_message(session_id, data)
-            
+            try:
+                data = json.loads(message)
+                handle_ws_message(session_id, data, connection_id)
+            except json.JSONDecodeError:
+                print(f"Invalid JSON received: {message}")
+            except Exception as e:
+                print(f"Error handling WS message: {e}")
+                
     finally:
-        del active_connections[connection_id]
-        session = get_session(session_id)
-        if session and str(current_user.id) in session['participants']:
-            participants = session['participants']
-            del participants[str(current_user.id)]
-            update_session(session_id, {
-                'participants': json.dumps(participants)
-            })
-            broadcast(session_id, {
-                'type': 'participant_left',
-                'userId': str(current_user.id)
-            })
+        # Cleanup: Remove connection and update participant list
+        if connection_id in active_connections:
+            del active_connections[connection_id]
+        
+        # Check if the user has any other active connections to this session
+        user_still_connected = False
+        for conn in active_connections.values():
+            if conn['session_id'] == session_id and conn['user_id'] == user_id_str:
+                user_still_connected = True
+                break
+        
+        if not user_still_connected:
+            session = get_session(session_id)
+            if session and user_id_str in session['participants']:
+                participants = session['participants']
+                del participants[user_id_str]
+                update_session(session_id, {
+                    'participants': json.dumps(participants)
+                })
+                redis_client.delete(f'user_sessions:{user_id_str}:{session_id}') # Clean up user's session entry
+                broadcast(session_id, {
+                    'type': 'participant_left',
+                    'userId': user_id_str
+                })
 
-def handle_ws_message(session_id, data):
+def handle_ws_message(session_id, data, connection_id):
     session = get_session(session_id)
     if not session:
         return
+    
+    user_id_str = active_connections[connection_id]['user_id']
         
     if data['type'] == 'code_change':
+        # Limit history to 50 entries
         history = session['history']
         history.append({
             'timestamp': datetime.now().isoformat(),
-            'userId': data['userId'],
+            'userId': user_id_str,
             'code': data['code']
         })
-        if len(history) > 50:
-            history = history[-50:]
+        history = history[-50:] # Keep only the last 50 entries
             
         update_session(session_id, {
             'code': data['code'],
@@ -290,44 +339,54 @@ def handle_ws_message(session_id, data):
         broadcast(session_id, {
             'type': 'code_update',
             'code': data['code'],
-            'userId': data['userId']
-        })
+            'userId': user_id_str
+        }, exclude_user_connection_id=connection_id) # Exclude the sender
         
     elif data['type'] == 'language_change':
+        if user_id_str != session['owner_id']: # Only owner can change language (optional)
+            # You might want to flash an error or ignore if not owner
+            print(f"User {user_id_str} tried to change language but is not owner.")
+            return
+
         update_session(session_id, {
             'language': data['language']
         })
         broadcast(session_id, {
             'type': 'language_update',
             'language': data['language'],
-            'userId': data['userId']
+            'userId': user_id_str
         })
         
     elif data['type'] == 'cursor_update':
         broadcast(session_id, {
             'type': 'cursor_update',
-            'userId': data['userId'],
+            'userId': user_id_str,
             'position': data['position']
-        }, exclude_user=data['userId'])
+        }, exclude_user_connection_id=connection_id) # Exclude the sender
         
     elif data['type'] == 'history_request':
         session = get_session(session_id)
         if session:
-            active_connections[data['connectionId']]['ws'].send(json.dumps({
+            # Send history only to the requesting connection
+            active_connections[connection_id]['ws'].send(json.dumps({
                 'type': 'history_response',
                 'history': session['history']
             }))
 
-def broadcast(session_id, message, exclude_user=None):
+def broadcast(session_id, message, exclude_user_connection_id=None):
     for conn_id, conn in list(active_connections.items()):
         if conn['session_id'] == session_id:
-            if exclude_user and conn['user_id'] == exclude_user:
+            if exclude_user_connection_id and conn_id == exclude_user_connection_id:
                 continue
             try:
                 conn['ws'].send(json.dumps(message))
-            except:
+            except Exception as e:
+                print(f"Error broadcasting to connection {conn_id}: {e}. Removing connection.")
                 del active_connections[conn_id]
 
+# --- Code Execution Route ---
+# The execution module imports remain the same. Ensure you have the `execution` directory
+# with `python_exec.py`, `cpp_exec.py`, etc.
 @app.route('/execute', methods=['POST'])
 @login_required
 def execute():
@@ -338,9 +397,10 @@ def execute():
     
     session = get_session(session_id)
     if not session or str(current_user.id) not in session['participants']:
-        return jsonify({'error': 'Access denied'}), 403
+        return jsonify({'error': 'Доступ запрещен'}), 403
     
     try:
+        result = {'output': '', 'error': ''}
         if language == 'python':
             from execution.python_exec import execute_python
             result = execute_python(code)
@@ -357,7 +417,7 @@ def execute():
             from execution.javascript_exec import execute_javascript
             result = execute_javascript(code)
         else:
-            return jsonify({'error': 'Unsupported language'}), 400
+            return jsonify({'error': 'Неподдерживаемый язык'}), 400
         
         history = session['history']
         history.append({
@@ -378,8 +438,9 @@ def execute():
 
 @app.route('/error')
 def error():
-    error_msg = request.args.get('msg', 'An error occurred')
+    error_msg = request.args.get('msg', 'Произошла ошибка')
     return render_template('error.html', error=error_msg)
 
 if __name__ == '__main__':
     app.run(debug=True)
+
