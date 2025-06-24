@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeSpace - Сессия {{ session_id }}</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .navbar {
+            flex-shrink: 0;
+        }
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        .editor-container, .output-container {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,.05);
+        }
+        .editor-wrapper {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 60vh; /* Устанавливаем высоту для редактора */
+            margin-bottom: 20px;
+        }
+        .CodeMirror {
+            height: 100%;
+            font-size: 1.1em;
+            line-height: 1.5;
+        }
+        .output-container {
+            height: 30vh; /* Устанавливаем высоту для вывода */
+            padding: 15px;
+            overflow-y: auto;
+            background-color: #333;
+            color: #eee;
+            font-family: monospace;
+            white-space: pre-wrap; /* Сохраняет пробелы и переводы строк, переносит длинные строки */
+        }
+        .controls {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        .controls .form-control {
+            margin-right: 10px;
+        }
+        .session-info {
+            font-size: 0.9em;
+            color: #666;
+            margin-left: auto; /* Прижимает к правому краю */
+        }
+        .lock-status-icon {
+            margin-left: 10px;
+            cursor: pointer;
+            font-size: 1.2em;
+            color: gray;
+        }
+        .lock-status-icon.locked {
+            color: red;
+        }
+        .lock-status-icon.unlocked {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <a class="navbar-brand" href="/">CodeSpace</a>
+        <span class="navbar-text ml-auto">
+            {% if current_user.is_authenticated %}
+            Привет, {{ current_user.id }}! &nbsp;
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('logout') }}">Выйти</a>
+            {% else %}
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('login') }}">Войти</a>
+            {% endif %}
+        </span>
+    </nav>
+
+    <div class="main-content container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="controls">
+                    <label for="languageSelect" class="sr-only">Язык:</label>
+                    <select class="form-control col-md-2" id="languageSelect">
+                        {% for lang_key, lang_info in languages.items() %}
+                        <option value="{{ lang_key }}" {% if lang_key == initial_language %}selected{% endif %}>{{ lang_info.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="btn btn-primary ml-2" id="runCode">Выполнить код</button>
+                    <span class="session-info ml-auto">
+                        ID Сессии: <strong id="session-id-display">{{ session_id }}</strong>
+                        <span id="lock-status-icon" class="lock-status-icon" title="Блокировка редактора">
+                            {% if initial_lock_status %} &#128274; {% else %} &#128275; {% endif %}
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="row editor-wrapper">
+            <div class="col-12 editor-container">
+                <textarea id="codeEditor">{{ initial_code }}</textarea>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12 output-container">
+                <pre id="outputArea">{{ initial_output }}</pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script> <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script> <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/ruby/ruby.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/rust/rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/php/php.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/haskell/haskell.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/perl/perl.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/r/r.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/shell/shell.min.js"></script> <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/lua/lua.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script>
+        const sessionId = "{{ session_id }}";
+        const initialLanguage = "{{ initial_language }}";
+        const initialLockStatus = {{ 'true' if initial_lock_status else 'false' }};
+
+        let editor;
+        let socket;
+        let isCodeUpdateFromSocket = false; // Флаг для отслеживания обновлений из сокета
+        let editorLocked = initialLockStatus;
+
+        // Карта языков для CodeMirror modes
+        const languageModes = {
+            'python': 'python',
+            'cpp': 'text/x-c++src',
+            'csharp': 'text/x-csharp',
+            'java': 'text/x-java',
+            'javascript': 'javascript',
+            'go': 'text/x-go',
+            'ruby': 'ruby',
+            'rust': 'rust',
+            'php': 'php',
+            'swift': 'text/x-swift',
+            'kotlin': 'text/x-kotlin',
+            'scala': 'text/x-scala',
+            'haskell': 'haskell',
+            'perl': 'perl',
+            'r': 'r',
+            'bash': 'shell',
+            'typescript': 'text/typescript',
+            'lua': 'lua',
+            'dart': 'text/x-dart',
+            'julia': 'text/x-julia' // Проверьте, есть ли этот режим или используйте 'text/plain'
+        };
+
+        function setEditorMode(language) {
+            const mode = languageModes[language] || 'text/plain'; // По умолчанию - обычный текст
+            editor.setOption("mode", mode);
+            CodeMirror.autoLoadMode(editor, mode); // Попытка загрузить режим, если он не загружен
+        }
+
+        function updateLockIcon() {
+            const icon = document.getElementById('lock-status-icon');
+            if (editorLocked) {
+                icon.innerHTML = '&#128274;'; // Замок закрыт
+                icon.classList.remove('unlocked');
+                icon.classList.add('locked');
+                editor.setOption('readOnly', true);
+            } else {
+                icon.innerHTML = '&#128275;'; // Замок открыт
+                icon.classList.remove('locked');
+                icon.classList.add('unlocked');
+                editor.setOption('readOnly', false);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
+                lineNumbers: true,
+                mode: languageModes[initialLanguage] || 'text/plain',
+                theme: 'dracula',
+                indentUnit: 4,
+                tabSize: 4,
+                indentWithTabs: true,
+                readOnly: initialLockStatus // Устанавливаем начальное состояние readOnly
+            });
+
+            setEditorMode(initialLanguage); // Устанавливаем режим при инициализации
+            updateLockIcon(); // Обновляем иконку при инициализации
+
+            socket = io();
+
+            socket.on('connect', () => {
+                console.log('Connected to WebSocket server');
+                socket.emit('join', { session_id: sessionId });
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from WebSocket server');
+            });
+
+            socket.on('initial_code', (data) => {
+                // Получаем начальный код и состояние блокировки при присоединении к сессии
+                isCodeUpdateFromSocket = true;
+                editor.setValue(data.code);
+                isCodeUpdateFromSocket = false;
+                
+                // Обновляем язык
+                document.getElementById('languageSelect').value = data.language;
+                setEditorMode(data.language);
+
+                // Обновляем статус блокировки
+                editorLocked = data.is_locked;
+                updateLockIcon();
+
+                document.getElementById('outputArea').textContent = data.output;
+                console.log('Initial code, language, output, and lock status received.');
+            });
+
+            socket.on('code_update', (data) => {
+                if (data.session_id === sessionId) {
+                    // console.log('Received code update for session:', data.session_id);
+                    // Проверяем, чтобы обновление пришло не от текущего клиента
+                    // isCodeUpdateFromSocket флаг предотвращает бесконечные циклы
+                    if (!isCodeUpdateFromSocket) {
+                         isCodeUpdateFromSocket = true;
+                        // Сравниваем текущий код с полученным, чтобы избежать лишних обновлений DOM
+                        if (editor.getValue() !== data.code) {
+                            editor.setValue(data.code);
+                        }
+                        isCodeUpdateFromSocket = false;
+                    }
+                }
+            });
+
+            socket.on('language_update', (data) => {
+                if (data.session_id === sessionId) {
+                    console.log('Received language update for session:', data.session_id, 'new language:', data.language);
+                    document.getElementById('languageSelect').value = data.language;
+                    setEditorMode(data.language);
+                }
+            });
+
+            socket.on('execution_result', (data) => {
+                if (data.session_id === sessionId) {
+                    document.getElementById('outputArea').textContent = data.output;
+                    console.log('Execution result received:', data.output);
+                }
+            });
+
+            socket.on('lock_status_changed', (data) => {
+                if (data.session_id === sessionId) {
+                    editorLocked = data.is_locked;
+                    updateLockIcon();
+                    console.log('Lock status changed:', editorLocked);
+                }
+            });
+
+            socket.on('error', (data) => {
+                console.error('WebSocket Error:', data.message);
+                alert('Ошибка: ' + data.message);
+            });
+
+            // Debounce для отправки изменений кода
+            let debounceTimeout;
+            editor.on('change', () => {
+                if (isCodeUpdateFromSocket) {
+                    return; // Игнорируем изменения, пришедшие из сокета
+                }
+                clearTimeout(debounceTimeout);
+                debounceTimeout = setTimeout(() => {
+                    socket.emit('code_change', { session_id: sessionId, code: editor.getValue() });
+                }, 250); // Отправляем изменения не чаще, чем раз в 250 мс
+            });
+
+            // Обработчик изменения языка
+            document.getElementById('languageSelect').addEventListener('change', (event) => {
+                const newLanguage = event.target.value;
+                setEditorMode(newLanguage);
+                socket.emit('language_change', { session_id: sessionId, language: newLanguage });
+            });
+
+            // Обработчик кнопки "Выполнить код"
+            document.getElementById('runCode').addEventListener('click', () => {
+                document.getElementById('outputArea').textContent = 'Выполнение...';
+                socket.emit('execute_code', { session_id: sessionId });
+            });
+
+            // Обработчик кнопки блокировки
+            document.getElementById('lock-status-icon').addEventListener('click', () => {
+                fetch(`/toggle_lock/${sessionId}`, { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // editorLocked будет обновлен через SocketIO
+                            console.log('Toggle lock request sent. New status:', data.is_locked);
+                        } else {
+                            alert('Не удалось изменить статус блокировки: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error toggling lock:', error);
+                        alert('Произошла ошибка при изменении статуса блокировки.');
+                    });
+            });
+        });
+    </script>
+</body>
+</html>
