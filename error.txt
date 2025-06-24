@@ -1,8 +1,14 @@
-AttributeError
-AttributeError: 'bool' object has no attribute 'lower'
+werkzeug.routing.exceptions.BuildError
+werkzeug.routing.exceptions.BuildError: Could not build url for endpoint 'code_editor' with values ['session_id']. Did you forget to specify values ['session_id_str']?
 
 Traceback (most recent call last)
 File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\app.py", line 2213, in __call__
+return self.wsgi_app(environ, start_response)
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask_socketio\__init__.py", line 42, in __call__
+return super().__call__(environ, start_response)
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\engineio\middleware.py", line 74, in __call__
 return self.wsgi_app(environ, start_response)
        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\app.py", line 2193, in wsgi_app
@@ -23,13 +29,22 @@ return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
 File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask_login\utils.py", line 290, in decorated_view
 return current_app.ensure_sync(func)(*args, **kwargs)
        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-File "c:\Users\azeva\OneDrive\Desktop\codespace\app.py", line 270, in join_session
-session = get_session(session_id)
-          ^^^^^^^^^^^^^^^^^^^^^^^
-File "c:\Users\azeva\OneDrive\Desktop\codespace\app.py", line 140, in get_session
-session_data['is_locked'] = session_data.get('is_locked', 'false').lower() == 'true'
-                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-AttributeError: 'bool' object has no attribute 'lower'
+File "c:\Users\azeva\OneDrive\Desktop\codespace\app.py", line 207, in new_session
+return redirect(url_for('code_editor', session_id=session_id_str))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\helpers.py", line 225, in url_for
+return current_app.url_for(
+       
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\app.py", line 1697, in url_for
+return self.handle_url_build_error(error, endpoint, values)
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\app.py", line 1686, in url_for
+rv = url_adapter.build(  # type: ignore[union-attr]
+     
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\werkzeug\routing\map.py", line 924, in build
+raise BuildError(endpoint, values, method, self)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+werkzeug.routing.exceptions.BuildError: Could not build url for endpoint 'code_editor' with values ['session_id']. Did you forget to specify values ['session_id_str']?
 The debugger caught an exception in your WSGI application. You can now look at the traceback which led to the error.
 To switch between the interactive traceback and the plaintext one, you can click on the "Traceback" headline. From the text traceback you can also create a paste of it. For code execution mouse-over the frame you want to debug and click on the console icon on the right side.
 
