@@ -83,7 +83,7 @@
         <a class="navbar-brand" href="/">CodeSpace</a>
         <span class="navbar-text ml-auto">
             {% if current_user.is_authenticated %}
-            Привет, {{ current_user.id }}! &nbsp;
+            Привет, {{ current_user.username }}! &nbsp;
             <a class="btn btn-sm btn-outline-light" href="{{ url_for('logout') }}">Выйти</a>
             {% else %}
             <a class="btn btn-sm btn-outline-light" href="{{ url_for('login') }}">Войти</a>
@@ -104,9 +104,11 @@
                     <button class="btn btn-primary ml-2" id="runCode">Выполнить код</button>
                     <span class="session-info ml-auto">
                         ID Сессии: <strong id="session-id-display">{{ session_id }}</strong>
+                        {% if is_owner %}
                         <span id="lock-status-icon" class="lock-status-icon" title="Блокировка редактора">
                             {% if initial_lock_status %} &#128274; {% else %} &#128275; {% endif %}
                         </span>
+                        {% endif %}
                     </span>
                 </div>
             </div>
@@ -137,7 +139,8 @@
     <script>
         const sessionId = "{{ session_id }}";
         const initialLanguage = "{{ initial_language }}";
-        const initialLockStatus = {{ 'true' if initial_lock_status else 'false' }};
+        let initialLockStatus = {{ 'true' if initial_lock_status else 'false' }};
+        const isOwner = {{ 'true' if is_owner else 'false' }};
 
         let editor;
         let socket;
@@ -165,28 +168,30 @@
             'typescript': 'text/typescript',
             'lua': 'lua',
             'dart': 'text/x-dart',
-            'julia': 'text/x-julia' // Проверьте, есть ли этот режим или используйте 'text/plain'
+            'julia': 'text/x-julia' 
         };
 
         function setEditorMode(language) {
-            const mode = languageModes[language] || 'text/plain'; // По умолчанию - обычный текст
+            const mode = languageModes[language] || 'text/plain';
             editor.setOption("mode", mode);
-            CodeMirror.autoLoadMode(editor, mode); // Попытка загрузить режим, если он не загружен
+            CodeMirror.autoLoadMode(editor, mode); 
         }
 
         function updateLockIcon() {
             const icon = document.getElementById('lock-status-icon');
-            if (editorLocked) {
-                icon.innerHTML = '&#128274;'; // Замок закрыт
-                icon.classList.remove('unlocked');
-                icon.classList.add('locked');
-                editor.setOption('readOnly', true);
-            } else {
-                icon.innerHTML = '&#128275;'; // Замок открыт
-                icon.classList.remove('locked');
-                icon.classList.add('unlocked');
-                editor.setOption('readOnly', false);
+            if (icon) { // Проверяем, существует ли иконка (она показывается только владельцу)
+                if (editorLocked) {
+                    icon.innerHTML = '&#128274;'; // Замок закрыт
+                    icon.classList.remove('unlocked');
+                    icon.classList.add('locked');
+                } else {
+                    icon.innerHTML = '&#128275;'; // Замок открыт
+                    icon.classList.remove('locked');
+                    icon.classList.add('unlocked');
+                }
             }
+            // Устанавливаем readOnly для редактора в зависимости от блокировки И того, является ли пользователь владельцем
+            editor.setOption('readOnly', editorLocked && !isOwner);
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -197,11 +202,11 @@
                 indentUnit: 4,
                 tabSize: 4,
                 indentWithTabs: true,
-                readOnly: initialLockStatus // Устанавливаем начальное состояние readOnly
+                readOnly: initialLockStatus && !isOwner // ReadOnly если заблокировано И не владелец
             });
 
-            setEditorMode(initialLanguage); // Устанавливаем режим при инициализации
-            updateLockIcon(); // Обновляем иконку при инициализации
+            setEditorMode(initialLanguage);
+            updateLockIcon(); // Обновляем иконку и состояние readOnly
 
             socket = io();
 
@@ -214,32 +219,27 @@
                 console.log('Disconnected from WebSocket server');
             });
 
-            socket.on('initial_code', (data) => {
-                // Получаем начальный код и состояние блокировки при присоединении к сессии
+            // Обновленное событие initial_state
+            socket.on('initial_state', (data) => {
                 isCodeUpdateFromSocket = true;
                 editor.setValue(data.code);
                 isCodeUpdateFromSocket = false;
                 
-                // Обновляем язык
                 document.getElementById('languageSelect').value = data.language;
                 setEditorMode(data.language);
 
-                // Обновляем статус блокировки
+                initialLockStatus = data.is_locked; // Обновляем локальное состояние начальной блокировки
                 editorLocked = data.is_locked;
                 updateLockIcon();
 
                 document.getElementById('outputArea').textContent = data.output;
-                console.log('Initial code, language, output, and lock status received.');
+                console.log('Initial state (code, language, output, lock status, owner status) received.');
             });
 
             socket.on('code_update', (data) => {
                 if (data.session_id === sessionId) {
-                    // console.log('Received code update for session:', data.session_id);
-                    // Проверяем, чтобы обновление пришло не от текущего клиента
-                    // isCodeUpdateFromSocket флаг предотвращает бесконечные циклы
                     if (!isCodeUpdateFromSocket) {
                          isCodeUpdateFromSocket = true;
-                        // Сравниваем текущий код с полученным, чтобы избежать лишних обновлений DOM
                         if (editor.getValue() !== data.code) {
                             editor.setValue(data.code);
                         }
@@ -250,7 +250,6 @@
 
             socket.on('language_update', (data) => {
                 if (data.session_id === sessionId) {
-                    console.log('Received language update for session:', data.session_id, 'new language:', data.language);
                     document.getElementById('languageSelect').value = data.language;
                     setEditorMode(data.language);
                 }
@@ -259,14 +258,13 @@
             socket.on('execution_result', (data) => {
                 if (data.session_id === sessionId) {
                     document.getElementById('outputArea').textContent = data.output;
-                    console.log('Execution result received:', data.output);
                 }
             });
 
             socket.on('lock_status_changed', (data) => {
                 if (data.session_id === sessionId) {
                     editorLocked = data.is_locked;
-                    updateLockIcon();
+                    updateLockIcon(); // Обновляем иконку и readOnly
                     console.log('Lock status changed:', editorLocked);
                 }
             });
@@ -280,44 +278,42 @@
             let debounceTimeout;
             editor.on('change', () => {
                 if (isCodeUpdateFromSocket) {
-                    return; // Игнорируем изменения, пришедшие из сокета
+                    return; 
                 }
                 clearTimeout(debounceTimeout);
                 debounceTimeout = setTimeout(() => {
                     socket.emit('code_change', { session_id: sessionId, code: editor.getValue() });
-                }, 250); // Отправляем изменения не чаще, чем раз в 250 мс
+                }, 250); 
             });
 
-            // Обработчик изменения языка
             document.getElementById('languageSelect').addEventListener('change', (event) => {
                 const newLanguage = event.target.value;
                 setEditorMode(newLanguage);
                 socket.emit('language_change', { session_id: sessionId, language: newLanguage });
             });
 
-            // Обработчик кнопки "Выполнить код"
             document.getElementById('runCode').addEventListener('click', () => {
                 document.getElementById('outputArea').textContent = 'Выполнение...';
                 socket.emit('execute_code', { session_id: sessionId });
             });
 
-            // Обработчик кнопки блокировки
-            document.getElementById('lock-status-icon').addEventListener('click', () => {
-                fetch(`/toggle_lock/${sessionId}`, { method: 'POST' })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            // editorLocked будет обновлен через SocketIO
-                            console.log('Toggle lock request sent. New status:', data.is_locked);
-                        } else {
-                            alert('Не удалось изменить статус блокировки: ' + data.message);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error toggling lock:', error);
-                        alert('Произошла ошибка при изменении статуса блокировки.');
-                    });
-            });
+            // Обработчик кнопки блокировки, только если пользователь является владельцем
+            const lockIconElement = document.getElementById('lock-status-icon');
+            if (lockIconElement) {
+                lockIconElement.addEventListener('click', () => {
+                    fetch(`/toggle_lock/${sessionId}`, { method: 'POST' })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (!data.success) {
+                                alert('Не удалось изменить статус блокировки: ' + data.message);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error toggling lock:', error);
+                            alert('Произошла ошибка при изменении статуса блокировки.');
+                        });
+                });
+            }
         });
     </script>
 </body>
