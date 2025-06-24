@@ -4,11 +4,13 @@ import json
 import threading
 from datetime import datetime, timedelta
 
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 
-# Импортируем модули для выполнения кода
+# Импортируем модули для выполнения кода (путь к ним не меняется)
 from execution.python_exec import execute_python
 from execution.cpp_exec import execute_cpp
 from execution.csharp_exec import execute_csharp
@@ -31,38 +33,86 @@ from execution.dart_exec import execute_dart
 from execution.julia_exec import execute_julia
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = secrets.token_hex(16) # Устанавливаем секретный ключ
-app.config['SESSION_COOKIE_SECURE'] = True # Рекомендуется для HTTPS
+app.config['SECRET_KEY'] = secrets.token_hex(16)
+app.config['SESSION_COOKIE_SECURE'] = False # True для HTTPS, False для HTTP (локальная разработка)
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=30) # Для flask_login
+app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=30)
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', logger=True, engineio_logger=True) # Разрешаем CORS для всех источников во время разработки
+# Настройка SQLAlchemy
+# SQLite база данных будет сохранена в файле site.db в корне проекта
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Отключаем отслеживание изменений, чтобы избежать предупреждений
+db = SQLAlchemy(app)
+
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', logger=True, engineio_logger=True)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'login' # Перенаправляем на '/login', если не авторизован
 
-# Имитация базы данных пользователей
-users = {
-    "user1": {"password": "password1", "id": "1"},
-    "user2": {"password": "password2", "id": "2"},
-}
+# --- Модели Базы Данных ---
+class User(db.Model, UserMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(20), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128), nullable=False)
+    # Связь с сессиями, где пользователь является владельцем
+    owned_sessions = db.relationship('CodeSession', backref='owner', lazy=True)
 
-class User(UserMixin):
-    def __init__(self, id):
-        self.id = id
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
 
-    def get_id(self):
-        return str(self.id)
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
+    def __repr__(self):
+        return f"User('{self.username}', ID: {self.id})"
+
+class CodeSession(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    session_id_str = db.Column(db.String(32), unique=True, nullable=False) # Уникальный публичный ID
+    code = db.Column(db.Text, nullable=False, default='')
+    language = db.Column(db.String(50), nullable=False, default='python')
+    output = db.Column(db.Text, nullable=False, default='')
+    is_locked = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_active = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True) # Может быть null, если анонимно
+
+    def __repr__(self):
+        return f"CodeSession('{self.session_id_str}', Lang: '{self.language}', Locked: {self.is_locked})"
+
+# --- Инициализация Базы Данных ---
+# Создаем таблицы, если их нет
+with app.app_context():
+    db.create_all()
+
+# --- Flask-Login User Loader ---
 @login_manager.user_loader
 def load_user(user_id):
-    return User(user_id) if user_id in users else None
+    return db.session.get(User, int(user_id)) # Используем db.session.get для получения пользователя по PK
 
-# In-memory хранилище сессий. В продакшене использовать Redis, базу данных и т.д.
-# { session_id: { 'code': '...', 'language': '...', 'output': '...', 'is_locked': False, 'created_at': datetime.now(), 'last_active': datetime.now() } }
-sessions = {}
-session_lock = threading.Lock() # Для обеспечения атомарности операций с сессиями
+# --- Вспомогательные функции для сессий ---
+def get_session_from_db(session_id_str):
+    """Получает сессию из базы данных по строковому ID."""
+    s = db.session.execute(db.select(CodeSession).filter_by(session_id_str=session_id_str)).scalar_one_or_none()
+    if s:
+        s.last_active = datetime.utcnow()
+        db.session.commit()
+    return s
+
+def create_new_session_in_db(language='python', owner_id=None):
+    """Создает новую сессию в базе данных."""
+    new_session_id_str = secrets.token_hex(8)
+    new_session = CodeSession(
+        session_id_str=new_session_id_str,
+        language=language,
+        owner_id=owner_id,
+        created_at=datetime.utcnow(),
+        last_active=datetime.utcnow()
+    )
+    db.session.add(new_session)
+    db.session.commit()
+    return new_session_id_str
 
 # Список доступных языков и их исполнителей
 AVAILABLE_LANGUAGES = {
@@ -88,40 +138,36 @@ AVAILABLE_LANGUAGES = {
     'julia': {'name': 'Julia', 'executor': execute_julia},
 }
 
-def get_session(session_id):
-    with session_lock:
-        session_data = sessions.get(session_id)
-        if session_data:
-            # Обновляем время последней активности
-            session_data['last_active'] = datetime.now()
-            # Убедимся, что 'is_locked' всегда булево
-            current_is_locked = session_data.get('is_locked')
-            if not isinstance(current_is_locked, bool):
-                # Если это не булево, пытаемся преобразовать из строки или устанавливаем False
-                session_data['is_locked'] = str(current_is_locked).lower() == 'true' if isinstance(current_is_locked, str) else False
-            return session_data
-        return None
-
-def create_new_session(language='python'):
-    new_session_id = secrets.token_hex(8)
-    with session_lock:
-        sessions[new_session_id] = {
-            'code': '',
-            'language': language,
-            'output': '',
-            'is_locked': False,
-            'created_at': datetime.now(),
-            'last_active': datetime.now()
-        }
-    return new_session_id
-
 # --- Маршруты Flask ---
 
 @app.route('/')
 def index():
     if not current_user.is_authenticated:
         return redirect(url_for('login'))
-    return render_template('index.html')
+    return render_template('index.html', languages=AVAILABLE_LANGUAGES)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        # Проверка на существующего пользователя
+        existing_user = db.session.execute(db.select(User).filter_by(username=username)).scalar_one_or_none()
+        if existing_user:
+            flash('Имя пользователя уже занято. Выберите другое.', 'danger')
+            return render_template('register.html')
+        
+        new_user = User(username=username)
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.commit()
+        flash('Вы успешно зарегистрированы! Теперь вы можете войти.', 'success')
+        return redirect(url_for('login'))
+    return render_template('register.html')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -130,17 +176,22 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        if username in users and users[username]['password'] == password:
-            user = User(users[username]['id'])
-            login_user(user, remember=True) # Сохраняем пользователя в сессии
+        
+        user = db.session.execute(db.select(User).filter_by(username=username)).scalar_one_or_none()
+        
+        if user and user.check_password(password):
+            login_user(user, remember=True)
             return redirect(url_for('index'))
-        return render_template('login.html', error='Неправильное имя пользователя или пароль')
+        else:
+            flash('Неправильное имя пользователя или пароль', 'danger')
+        return render_template('login.html')
     return render_template('login.html')
 
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
+    flash('Вы вышли из системы.', 'info')
     return redirect(url_for('login'))
 
 @app.route('/new_session', methods=['POST'])
@@ -150,39 +201,58 @@ def new_session():
     if language not in AVAILABLE_LANGUAGES:
         language = 'python' # Дефолтный язык, если передан некорректный
     
-    session_id = create_new_session(language)
-    return redirect(url_for('code_editor', session_id=session_id))
+    owner_id = current_user.id if current_user.is_authenticated else None
+    session_id_str = create_new_session_in_db(language, owner_id)
+    
+    return redirect(url_for('code_editor', session_id=session_id_str))
 
-@app.route('/session/<session_id>')
+@app.route('/session/<session_id_str>')
 @login_required
-def code_editor(session_id):
-    s = get_session(session_id)
+def code_editor(session_id_str):
+    s = get_session_from_db(session_id_str)
     if not s:
-        return "Сессия не найдена", 404
-    return render_template('editor.html', session_id=session_id, initial_code=s['code'], initial_language=s['language'], initial_output=s['output'], initial_lock_status=s['is_locked'], languages=AVAILABLE_LANGUAGES)
+        flash("Сессия не найдена.", 'danger')
+        return redirect(url_for('index'))
+    
+    # Передаем статус блокировки и является ли текущий пользователь владельцем
+    is_owner = current_user.is_authenticated and s.owner_id == current_user.id
+    
+    return render_template('editor.html', 
+                           session_id=session_id_str, 
+                           initial_code=s.code, 
+                           initial_language=s.language, 
+                           initial_output=s.output, 
+                           initial_lock_status=s.is_locked, 
+                           languages=AVAILABLE_LANGUAGES,
+                           is_owner=is_owner)
 
 @app.route('/join_session', methods=['POST'])
 @login_required
 def join_session():
-    session_id = request.form.get('session_id')
-    session_data = get_session(session_id)
-    if session_data:
-        return redirect(url_for('code_editor', session_id=session_id))
-    return render_template('index.html', error_message='Сессия с таким ID не найдена.')
+    session_id_str = request.form.get('session_id')
+    s = get_session_from_db(session_id_str)
+    if s:
+        return redirect(url_for('code_editor', session_id_str=session_id_str))
+    flash('Сессия с таким ID не найдена.', 'danger')
+    return redirect(url_for('index'))
 
-@app.route('/toggle_lock/<session_id>', methods=['POST'])
+@app.route('/toggle_lock/<session_id_str>', methods=['POST'])
 @login_required
-def toggle_lock_endpoint(session_id):
-    s = get_session(session_id)
+def toggle_lock_endpoint(session_id_str):
+    s = get_session_from_db(session_id_str)
     if not s:
         return jsonify({'success': False, 'message': 'Сессия не найдена'}), 404
     
-    with session_lock:
-        s['is_locked'] = not s['is_locked']
-        lock_status = s['is_locked']
-    
-    socketio.emit('lock_status_changed', {'is_locked': lock_status, 'session_id': session_id}, room=session_id)
-    return jsonify({'success': True, 'is_locked': lock_status})
+    # Только владелец может переключать блокировку
+    if current_user.is_authenticated and s.owner_id == current_user.id:
+        s.is_locked = not s.is_locked
+        db.session.commit()
+        lock_status = s.is_locked
+        
+        socketio.emit('lock_status_changed', {'is_locked': lock_status, 'session_id': session_id_str}, room=session_id_str)
+        return jsonify({'success': True, 'is_locked': lock_status})
+    else:
+        return jsonify({'success': False, 'message': 'У вас нет прав для изменения статуса блокировки.'}), 403
 
 
 # --- SocketIO Обработчики ---
@@ -194,109 +264,111 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     print(f'Client disconnected: {request.sid}')
-    # Логика очистки, если пользователь был единственным в комнате
-    for session_id, s_data in sessions.items():
-        # Это неидеальный способ отслеживать пользователей в комнате,
-        # но для простоты мы можем проверять, пуста ли комната после дисконнекта
-        pass
 
 @socketio.on('join')
 def on_join(data):
-    session_id = data.get('session_id')
-    if not session_id:
+    session_id_str = data.get('session_id')
+    if not session_id_str:
         emit('error', {'message': 'Session ID is missing.'})
         return
 
-    s = get_session(session_id)
+    s = get_session_from_db(session_id_str)
     if not s:
         emit('error', {'message': 'Session not found.'})
         return
 
-    join_room(session_id)
-    # Отправляем текущее состояние сессии новому клиенту
-    emit('initial_code', {'code': s['code'], 'language': s['language'], 'output': s['output'], 'is_locked': s['is_locked']}, room=request.sid)
-    print(f'{request.sid} joined room {session_id}')
+    join_room(session_id_str)
+    
+    # Проверка владельца для правильного отображения кнопок блокировки на клиенте
+    is_owner = current_user.is_authenticated and s.owner_id == current_user.id
+
+    emit('initial_state', { # Изменено на initial_state для комплексного обновления
+        'code': s.code, 
+        'language': s.language, 
+        'output': s.output, 
+        'is_locked': s.is_locked,
+        'is_owner': is_owner # Передаем информацию о владельце
+    }, room=request.sid)
+    print(f'{request.sid} joined room {session_id_str}')
 
 @socketio.on('leave')
 def on_leave(data):
-    session_id = data.get('session_id')
-    if session_id:
-        leave_room(session_id)
-        print(f'{request.sid} left room {session_id}')
+    session_id_str = data.get('session_id')
+    if session_id_str:
+        leave_room(session_id_str)
+        print(f'{request.sid} left room {session_id_str}')
 
 @socketio.on('code_change')
 def handle_code_change(data):
-    session_id = data.get('session_id')
+    session_id_str = data.get('session_id')
     new_code = data.get('code')
     
-    if not session_id or new_code is None:
+    if not session_id_str or new_code is None:
         return
 
-    s = get_session(session_id)
+    s = get_session_from_db(session_id_str)
     if not s:
-        return # Сессия не найдена
+        return
 
-    # Проверяем статус блокировки
-    if s['is_locked'] and current_user.get_id() != s.get('owner_id'): # Предполагаем, что owner_id устанавливается при создании сессии
+    # Проверяем статус блокировки. Только владелец может менять код, если заблокировано.
+    if s.is_locked and (not current_user.is_authenticated or s.owner_id != current_user.id):
         # Если заблокировано, и это не владелец, не обновляем код
         # и отправляем текущий код обратно клиенту, который пытался изменить
-        emit('code_update', {'code': s['code'], 'session_id': session_id}, room=request.sid)
+        emit('code_update', {'code': s.code, 'session_id': session_id_str}, room=request.sid)
         return
 
-    # Обновляем код в хранилище
-    with session_lock:
-        s['code'] = new_code
+    s.code = new_code
+    s.last_active = datetime.utcnow()
+    db.session.commit()
     
-    # Отправляем обновленный код всем клиентам в комнате, кроме отправителя
-    # Это важно для предотвращения "ряби" и цикличных обновлений
-    emit('code_update', {'code': new_code, 'session_id': session_id}, room=session_id, skip_sid=request.sid)
+    emit('code_update', {'code': new_code, 'session_id': session_id_str}, room=session_id_str, skip_sid=request.sid)
 
 
 @socketio.on('language_change')
 def handle_language_change(data):
-    session_id = data.get('session_id')
+    session_id_str = data.get('session_id')
     new_language = data.get('language')
 
-    if not session_id or new_language not in AVAILABLE_LANGUAGES:
+    if not session_id_str or new_language not in AVAILABLE_LANGUAGES:
         return
 
-    s = get_session(session_id)
+    s = get_session_from_db(session_id_str)
     if not s:
         return
 
     # Проверяем статус блокировки
-    if s['is_locked'] and current_user.get_id() != s.get('owner_id'):
-        emit('language_update', {'language': s['language'], 'session_id': session_id}, room=request.sid)
+    if s.is_locked and (not current_user.is_authenticated or s.owner_id != current_user.id):
+        emit('language_update', {'language': s.language, 'session_id': session_id_str}, room=request.sid)
         return
 
-    with session_lock:
-        s['language'] = new_language
+    s.language = new_language
+    s.last_active = datetime.utcnow()
+    db.session.commit()
     
-    emit('language_update', {'language': new_language, 'session_id': session_id}, room=session_id)
+    emit('language_update', {'language': new_language, 'session_id': session_id_str}, room=session_id_str)
 
 
 @socketio.on('execute_code')
 def handle_execute_code(data):
-    session_id = data.get('session_id')
+    session_id_str = data.get('session_id')
     
-    s = get_session(session_id)
+    s = get_session_from_db(session_id_str)
     if not s:
-        emit('execution_result', {'output': 'Ошибка: Сессия не найдена.', 'session_id': session_id}, room=request.sid)
+        emit('execution_result', {'output': 'Ошибка: Сессия не найдена.', 'session_id': session_id_str}, room=request.sid)
         return
 
-    code_to_execute = s['code']
-    language = s['language']
+    code_to_execute = s.code
+    language = s.language
 
     executor_info = AVAILABLE_LANGUAGES.get(language)
     if not executor_info:
-        emit('execution_result', {'output': f'Ошибка: Исполнитель для языка "{language}" не найден.', 'session_id': session_id}, room=request.sid)
+        emit('execution_result', {'output': f'Ошибка: Исполнитель для языка "{language}" не найден.', 'session_id': session_id_str}, room=request.sid)
         return
 
     executor_func = executor_info['executor']
     
-    # Запускаем выполнение в отдельном потоке, чтобы не блокировать SocketIO
     def run_execution():
-        print(f"Executing code for session {session_id} ({language})...")
+        print(f"Executing code for session {session_id_str} ({language})...")
         result = executor_func(code_to_execute)
         
         output = result.get('output', '')
@@ -304,41 +376,40 @@ def handle_execute_code(data):
         
         final_output = output + (f"\n\nОшибка:\n{error}" if error else "")
 
-        with session_lock:
-            s['output'] = final_output # Сохраняем результат выполнения в сессии
-
-        # Отправляем результат всем клиентам в комнате
-        socketio.emit('execution_result', {'output': final_output, 'session_id': session_id}, room=session_id)
-        print(f"Execution finished for session {session_id}. Output length: {len(final_output)}")
+        s_in_thread = db.session.execute(db.select(CodeSession).filter_by(session_id_str=session_id_str)).scalar_one_or_none()
+        if s_in_thread: # Убедимся, что сессия все еще существует
+            s_in_thread.output = final_output
+            s_in_thread.last_active = datetime.utcnow()
+            db.session.commit() # Сохраняем изменения в базе данных
+            
+        socketio.emit('execution_result', {'output': final_output, 'session_id': session_id_str}, room=session_id_str)
+        print(f"Execution finished for session {session_id_str}. Output length: {len(final_output)}")
 
     threading.Thread(target=run_execution).start()
 
 # --- Логика очистки старых сессий ---
 def cleanup_old_sessions():
-    """Удаляет старые сессии, которые неактивны более 1 часа."""
-    while True:
-        current_time = datetime.now()
-        sessions_to_delete = []
-        with session_lock:
-            for session_id, session_data in sessions.items():
-                if current_time - session_data['last_active'] > timedelta(hours=1):
-                    sessions_to_delete.append(session_id)
+    """Удаляет старые сессии из базы данных, которые неактивны более 1 часа."""
+    with app.app_context(): # Необходимо для доступа к db.session
+        while True:
+            current_time = datetime.utcnow()
+            # Удаляем сессии, которые неактивны более 1 часа
+            old_sessions = db.session.execute(
+                db.select(CodeSession).filter(CodeSession.last_active < current_time - timedelta(hours=1))
+            ).scalars().all()
             
-            for session_id in sessions_to_delete:
-                del sessions[session_id]
-                print(f"Сессия {session_id} удалена из-за неактивности.")
-        
-        # Проверяем каждые 30 минут
-        threading.Event().wait(1800) 
+            for s in old_sessions:
+                db.session.delete(s)
+                print(f"Сессия {s.session_id_str} удалена из-за неактивности.")
+            db.session.commit()
+            
+            threading.Event().wait(1800) # Проверяем каждые 30 минут
 
-# Запускаем поток для очистки сессий
 cleanup_thread = threading.Thread(target=cleanup_old_sessions)
-cleanup_thread.daemon = True # Поток завершится при завершении основного приложения
+cleanup_thread.daemon = True 
 cleanup_thread.start()
 
 
 if __name__ == '__main__':
-    # В продакшене используйте gunicorn или другой WSGI-сервер
-    # socketio.run(app, debug=True, host='0.0.0.0', port=5000)
     print("Starting Flask-SocketIO server...")
-    socketio.run(app, debug=True, allow_unsafe_werkzeug=True) # allow_unsafe_werkzeug=True для dev сервера на Flask 3+
+    socketio.run(app, debug=True, allow_unsafe_werkzeug=True)
