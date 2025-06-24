@@ -1,0 +1,39 @@
+AttributeError
+AttributeError: 'bool' object has no attribute 'lower'
+
+Traceback (most recent call last)
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\app.py", line 2213, in __call__
+return self.wsgi_app(environ, start_response)
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\app.py", line 2193, in wsgi_app
+response = self.handle_exception(e)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\app.py", line 2190, in wsgi_app
+response = self.full_dispatch_request()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\app.py", line 1486, in full_dispatch_request
+rv = self.handle_user_exception(e)
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\app.py", line 1484, in full_dispatch_request
+rv = self.dispatch_request()
+     ^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\app.py", line 1469, in dispatch_request
+return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\azeva\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask_login\utils.py", line 290, in decorated_view
+return current_app.ensure_sync(func)(*args, **kwargs)
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "c:\Users\azeva\OneDrive\Desktop\codespace\app.py", line 270, in join_session
+session = get_session(session_id)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+File "c:\Users\azeva\OneDrive\Desktop\codespace\app.py", line 140, in get_session
+session_data['is_locked'] = session_data.get('is_locked', 'false').lower() == 'true'
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'bool' object has no attribute 'lower'
+The debugger caught an exception in your WSGI application. You can now look at the traceback which led to the error.
+To switch between the interactive traceback and the plaintext one, you can click on the "Traceback" headline. From the text traceback you can also create a paste of it. For code execution mouse-over the frame you want to debug and click on the console icon on the right side.
+
+You can execute arbitrary Python code in the stack frames and there are some extra helpers available for introspection:
+
+dump() shows all variables in the frame
+dump(obj) dumps all that's known about the object
