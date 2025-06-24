@@ -2,56 +2,109 @@
 
 {% block head %}
 <style>
+    body {
+        background-color: #f0f2f5; /* Light gray background */
+    }
+    .session-header {
+        background-color: #343a40 !important; /* Darker header */
+        border-bottom: 2px solid #007bff; /* Blue accent */
+    }
+    .card {
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    .card-header {
+        border-bottom: none;
+        background-color: #ffffff; /* White card header */
+    }
+    .nav-tabs .nav-link {
+        color: #6c757d;
+        border: none;
+        border-radius: 0.25rem 0.25rem 0 0;
+    }
+    .nav-tabs .nav-link.active {
+        color: #007bff;
+        border-bottom: 3px solid #007bff;
+        background-color: #f8f9fa;
+        font-weight: bold;
+    }
     .editor-container {
         position: relative;
-        height: calc(100vh - 180px);
+        height: calc(100vh - 250px); /* Adjusted height for new elements */
+        border: 1px solid #dee2e6;
+        border-radius: 0 0 0.5rem 0.5rem;
+        overflow: hidden;
     }
-    
     #editor {
         width: 100%;
         height: 100%;
-        font-family: 'Fira Code', monospace;
-        font-size: 14px;
-        line-height: 1.5;
-        padding: 15px;
+        font-family: 'Fira Code', 'Cascadia Code', monospace; /* More modern font options */
+        font-size: 15px; /* Slightly larger font */
+        line-height: 1.6;
+        padding: 20px; /* Increased padding */
         border: none;
         resize: none;
         outline: none;
         tab-size: 4;
-        background-color: #f8f9fa;
+        background-color: #ffffff; /* White editor background */
+        color: #333;
+        caret-color: #007bff; /* Blue cursor */
     }
-    
     .participant-cursor {
         position: absolute;
         width: 2px;
-        height: 18px;
+        height: 1.6em; /* Adjust to line-height */
         z-index: 10;
+        animation: blink 1s infinite; /* Blinking cursor effect */
     }
-    
     .participant-label {
         position: absolute;
-        top: -20px;
+        top: -24px; /* Adjusted position */
         left: 0;
-        padding: 2px 5px;
-        font-size: 12px;
-        border-radius: 3px;
+        padding: 3px 7px;
+        font-size: 11px;
+        border-radius: 4px;
         white-space: nowrap;
         z-index: 11;
         color: white;
+        opacity: 0.9;
     }
-    
     .history-item {
         cursor: pointer;
-        border-left: 3px solid transparent;
+        border-left: 4px solid transparent; /* Thicker border */
+        transition: background-color 0.2s, border-left-color 0.2s;
     }
-    
     .history-item:hover {
-        background-color: #f8f9fa;
+        background-color: #e9ecef; /* Lighter hover background */
     }
-    
     .history-item.active {
-        border-left-color: #0d6efd;
-        background-color: #f8f9fa;
+        border-left-color: #007bff; /* Blue active border */
+        background-color: #e9ecef;
+    }
+    #output-content {
+        background-color: #212529; /* Dark background for output */
+        color: #f8f9fa;
+        min-height: 150px; /* Minimum height for output area */
+        padding: 15px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 14px;
+        border-radius: 0 0 0.5rem 0.5rem;
+        overflow-y: auto;
+    }
+    #output-content pre {
+        white-space: pre-wrap; /* Wrap long lines */
+        word-break: break-all;
+        color: #f8f9fa;
+    }
+    .alert-danger pre, .alert-success pre {
+        background-color: rgba(255,255,255,0.1);
+        padding: 10px;
+        border-radius: 5px;
+    }
+
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
     }
 </style>
 {% endblock %}
@@ -60,41 +113,45 @@
 <div class="container-fluid mt-3">
     <div class="session-header d-flex justify-content-between align-items-center bg-dark text-white p-3 rounded-top">
         <div>
-            <h5 class="mb-0">Collaborative Code Editor</h5>
-            <small class="text-muted">Logged in as: <strong>{{ current_user.username }}</strong></small>
+            <h5 class="mb-0">Совместный Редактор Кода</h5>
+            <small class="text-muted">Вы вошли как: <strong>{{ current_user.username }}</strong></small>
         </div>
-        <div>
+        <div class="d-flex align-items-center">
+            <div id="participants" class="me-3 d-flex align-items-center">
+                <span class="me-2 text-white-50">Участники:</span>
+                <div id="participants-list" class="d-flex"></div>
+            </div>
             <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-light">
-                <i class="bi bi-box-arrow-right"></i> Logout
+                <i class="bi bi-box-arrow-right"></i> Выйти
             </a>
         </div>
     </div>
     
-    <div class="card mt-3">
+    <div class="card">
         <div class="card-header">
             <ul class="nav nav-tabs card-header-tabs" id="editorTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="code-tab" data-bs-toggle="tab" data-bs-target="#code" type="button" role="tab">
-                        <i class="bi bi-code-square"></i> Editor
+                        <i class="bi bi-code-square"></i> Редактор
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="output-tab" data-bs-toggle="tab" data-bs-target="#output" type="button" role="tab">
-                        <i class="bi bi-terminal"></i> Output
+                        <i class="bi bi-terminal"></i> Вывод
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">
-                        <i class="bi bi-clock-history"></i> History
+                        <i class="bi bi-clock-history"></i> История
                     </button>
                 </li>
             </ul>
         </div>
         <div class="tab-content" id="editorTabsContent">
             <div class="tab-pane fade show active" id="code" role="tabpanel">
-                <div class="d-flex justify-content-between align-items-center mb-3 p-3">
+                <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
                     <div class="d-flex align-items-center">
-                        <select id="language" class="form-select form-select-sm me-2" style="width: 120px;">
+                        <select id="language" class="form-select form-select-sm me-2" style="width: 130px;">
                             <option value="python">Python</option>
                             <option value="cpp">C++</option>
                             <option value="csharp">C#</option>
@@ -102,35 +159,36 @@
                             <option value="javascript">JavaScript</option>
                         </select>
                         <button id="run-btn" class="btn btn-sm btn-success me-2">
-                            <i class="bi bi-play-fill"></i> Run
+                            <i class="bi bi-play-fill"></i> Запустить
                         </button>
-                        <button id="format-btn" class="btn btn-sm btn-outline-secondary me-2">
-                            <i class="bi bi-braces"></i> Format
+                        <button id="format-btn" class="btn btn-sm btn-outline-secondary me-2" disabled>
+                            <i class="bi bi-braces"></i> Форматировать
                         </button>
                     </div>
-                    <div class="d-flex align-items-center">
-                        <div id="participants" class="me-3 d-flex align-items-center">
-                            <span class="me-2">Participants:</span>
-                            <div id="participants-list" class="d-flex"></div>
-                        </div>
-                        <div class="input-group input-group-sm" style="width: 300px;">
-                            <input type="text" id="session-link" class="form-control" 
-                                   value="{{ url_for('join_session', session_id=session_id, _external=True) }}" readonly>
-                            <button id="copy-link-btn" class="btn btn-outline-secondary" type="button">
-                                <i class="bi bi-clipboard"></i>
-                            </button>
-                        </div>
+                    <div class="input-group input-group-sm" style="width: 350px;">
+                        <input type="text" id="session-link" class="form-control" 
+                               value="{{ url_for('join_session', session_id=session_id, _external=True) }}" readonly>
+                        <button id="copy-link-btn" class="btn btn-outline-secondary" type="button" title="Скопировать ссылку на сессию">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
                     </div>
                 </div>
                 
-                <div class="editor-container position-relative">
+                <div class="p-3 border-bottom">
+                    <div class="input-group input-group-sm">
+                        <input type="text" id="join-link-input" class="form-control" placeholder="Вставьте ссылку на сессию другого пользователя...">
+                        <button id="join-link-btn" class="btn btn-primary" type="button">Присоединиться</button>
+                    </div>
+                </div>
+
+                <div class="editor-container">
                     <textarea id="editor" spellcheck="false"># Write your code here</textarea>
                     <div id="editor-cursors"></div>
                 </div>
             </div>
             
             <div class="tab-pane fade" id="output" role="tabpanel">
-                <div id="output-content" class="p-3"></div>
+                <div id="output-content"></div>
             </div>
             
             <div class="tab-pane fade" id="history" role="tabpanel">
@@ -143,10 +201,12 @@
 </div>
 
 <div class="toast-container position-fixed bottom-0 end-0 p-3">
-    <div id="copy-toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-        <div class="toast-body d-flex justify-content-between align-items-center">
-            <span>Link copied to clipboard!</span>
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    <div id="copy-toast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body">
+                Ссылка скопирована в буфер обмена!
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
     </div>
 </div>
@@ -154,36 +214,42 @@
 
 {% block scripts %}
 <script>
-    // Инициализация редактора
     const editor = document.getElementById('editor');
     const output = document.getElementById('output-content');
     const languageSelect = document.getElementById('language');
     const runBtn = document.getElementById('run-btn');
-    const formatBtn = document.getElementById('format-btn');
+    const formatBtn = document.getElementById('format-btn'); // Currently disabled
     const copyLinkBtn = document.getElementById('copy-link-btn');
     const sessionLink = document.getElementById('session-link');
     const participantsList = document.getElementById('participants-list');
     const editorCursors = document.getElementById('editor-cursors');
     const historyList = document.getElementById('history-list');
+    const joinLinkInput = document.getElementById('join-link-input');
+    const joinLinkBtn = document.getElementById('join-link-btn');
     
-    // WebSocket соединение
     let socket;
     let userId = '{{ current_user.id }}';
     let sessionId = '{{ session_id }}';
     let isOwner = false;
     let participants = {};
     let cursorPositions = {};
-    let connectionId = null;
-    
-    // Инициализация WebSocket
+    let connectionId = null; // Unique ID for THIS specific WebSocket connection instance
+
     function initWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
-        socket = new WebSocket(`${protocol}//${host}/ws/${sessionId}`);
+        const wsUrl = `${protocol}//${host}/ws/${sessionId}`;
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.close(); // Close existing connection before opening a new one
+        }
+
+        socket = new WebSocket(wsUrl);
         
         socket.onopen = () => {
             console.log('WebSocket connected');
-            connectionId = uuidv4();
+            connectionId = uuidv4(); // Generate a new ID for the new connection
+            // No explicit 'connect' message needed, init message handles it.
         };
         
         socket.onmessage = (event) => {
@@ -212,12 +278,24 @@
                 case 'history_response':
                     handleHistoryResponse(data);
                     break;
+                default:
+                    console.warn('Unknown message type:', data.type);
             }
         };
         
-        socket.onclose = () => {
-            console.log('WebSocket disconnected');
-            setTimeout(initWebSocket, 1000);
+        socket.onclose = (event) => {
+            console.log('WebSocket disconnected:', event.code, event.reason);
+            // Attempt to reconnect if the disconnection was not intentional (e.g., page close)
+            if (!event.wasClean) {
+                console.log('Attempting to reconnect...');
+                setTimeout(initWebSocket, 3000); // Try to reconnect after 3 seconds
+            }
+        };
+
+        socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            // Error handling, might try to close and reconnect
+            socket.close();
         };
     }
     
@@ -241,26 +319,33 @@
     
     function handleCodeUpdate(data) {
         if (data.userId !== userId) {
+            const originalScrollTop = editor.scrollTop;
             editor.value = data.code;
+            editor.scrollTop = originalScrollTop; // Maintain scroll position
         }
     }
     
     function handleLanguageUpdate(data) {
         if (data.userId !== userId) {
             languageSelect.value = data.language;
+            // Optionally, update editor content with example for new language
+            editor.value = codeExamples[data.language] || '';
         }
     }
     
     function handleParticipantJoined(data) {
         participants[data.userId] = data.participant;
         updateParticipantsDisplay();
+        showToast(`Пользователь ${data.participant.name} присоединился к сессии.`, 'info');
     }
     
     function handleParticipantLeft(data) {
+        const participantName = participants[data.userId] ? participants[data.userId].name : 'Неизвестный пользователь';
         delete participants[data.userId];
         updateParticipantsDisplay();
+        showToast(`Пользователь ${participantName} покинул сессию.`, 'warning');
         
-        // Удаление курсора
+        // Remove cursor
         if (cursorPositions[data.userId]) {
             const cursorElement = document.getElementById(`cursor-${data.userId}`);
             if (cursorElement) {
@@ -274,11 +359,10 @@
         const position = data.position;
         const participant = participants[data.userId];
         
-        if (!participant) return;
+        if (!participant || data.userId === userId) return; // Don't show own cursor
         
         cursorPositions[data.userId] = position;
         
-        // Обновление или создание курсора
         let cursorElement = document.getElementById(`cursor-${data.userId}`);
         if (!cursorElement) {
             cursorElement = document.createElement('div');
@@ -295,28 +379,43 @@
             editorCursors.appendChild(cursorElement);
         }
         
-        // Позиционирование курсора
-        const text = editor.value;
-        const lines = text.split('\n');
-        let linePos = 0;
-        let lineNum = 0;
-        let found = false;
+        // Calculate cursor position in pixels
+        const editorRect = editor.getBoundingClientRect();
+        const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
+        const charWidth = 8.5; // Approximate average character width, might need fine-tuning
+
+        const textBeforeCursor = editor.value.substring(0, editor.selectionStart);
+        const lines = textBeforeCursor.split('\n');
+        const row = lines.length - 1;
+        const column = lines[row].length;
+
+        // More accurate cursor positioning attempt
+        const tempDiv = document.createElement('div');
+        tempDiv.style.cssText = `
+            position: absolute;
+            visibility: hidden;
+            white-space: pre-wrap; /* or pre */
+            font-family: ${getComputedStyle(editor).fontFamily};
+            font-size: ${getComputedStyle(editor).fontSize};
+            line-height: ${getComputedStyle(editor).lineHeight};
+            padding: ${getComputedStyle(editor).padding};
+            box-sizing: border-box;
+            width: ${editor.clientWidth}px;
+        `;
+        document.body.appendChild(tempDiv);
         
-        for (; lineNum < lines.length; lineNum++) {
-            if (position.row === lineNum) {
-                linePos = position.column;
-                found = true;
-                break;
-            }
-        }
+        tempDiv.textContent = lines[row].substring(0, position.column);
+        const span = document.createElement('span');
+        span.textContent = 'A'; // A single character to measure width
+        tempDiv.appendChild(span);
         
-        if (found) {
-            const lineHeight = 18; // Высота строки
-            const charWidth = 8;  // Ширина символа
-            
-            cursorElement.style.top = `${lineNum * lineHeight + 15}px`;
-            cursorElement.style.left = `${linePos * charWidth + 15}px`;
-        }
+        const cursorLeft = span.offsetLeft;
+        const cursorTop = row * lineHeight; // Approx line height * row index
+
+        tempDiv.remove();
+
+        cursorElement.style.top = `${cursorTop + editor.offsetTop + 5}px`; // + editor.offsetTop + padding
+        cursorElement.style.left = `${cursorLeft + editor.offsetLeft + 5}px`;
     }
     
     function handleHistoryResponse(data) {
@@ -329,9 +428,10 @@
         Object.keys(participants).forEach(id => {
             const participant = participants[id];
             const badge = document.createElement('span');
-            badge.className = 'badge rounded-pill me-1';
+            badge.className = 'badge rounded-pill me-1 px-3 py-2'; // Added padding
             badge.style.backgroundColor = participant.color;
             badge.textContent = participant.name;
+            badge.title = participant.name; // Tooltip on hover
             participantsList.appendChild(badge);
         });
     }
@@ -345,31 +445,42 @@
             
             const date = new Date(item.timestamp);
             const timeString = date.toLocaleTimeString();
+            const dateString = date.toLocaleDateString();
             
+            const participantName = participants[item.userId]?.name || 'Неизвестно';
+
             if (item.action === 'execution') {
                 historyItem.innerHTML = `
-                    <div class="d-flex justify-content-between">
-                        <span><i class="bi bi-play-fill me-2"></i>Execution (${item.language})</span>
-                        <small class="text-muted">${timeString}</small>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-bold"><i class="bi bi-play-fill me-2"></i>Выполнение (${item.language})</span>
+                        <small class="text-muted">${dateString} ${timeString}</small>
                     </div>
-                    <small class="text-muted">${participants[item.userId]?.name || 'Unknown'}</small>
+                    <small class="text-secondary">Исполнил: ${participantName}</small>
+                    ${item.error ? `<div class="text-danger mt-1"><i class="bi bi-exclamation-circle-fill"></i> Ошибка выполнения</div>` : ''}
                 `;
             } else {
                 historyItem.innerHTML = `
-                    <div class="d-flex justify-content-between">
-                        <span><i class="bi bi-pencil me-2"></i>Code change</span>
-                        <small class="text-muted">${timeString}</small>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-bold"><i class="bi bi-pencil me-2"></i>Изменение кода</span>
+                        <small class="text-muted">${dateString} ${timeString}</small>
                     </div>
-                    <small class="text-muted">${participants[item.userId]?.name || 'Unknown'}</small>
+                    <small class="text-secondary">Автор: ${participantName}</small>
                 `;
             }
             
             historyItem.addEventListener('click', () => {
                 if (item.code) {
                     editor.value = item.code;
+                    // Trigger a code update event to synchronize with others after loading history
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({
+                            type: 'code_change',
+                            code: editor.value,
+                            userId: userId
+                        }));
+                    }
                 }
                 
-                // Подсветка выбранного элемента
                 document.querySelectorAll('.history-item').forEach(el => {
                     el.classList.remove('active');
                 });
@@ -380,7 +491,6 @@
         });
     }
     
-    // Обработчики событий редактора
     editor.addEventListener('input', () => {
         if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({
@@ -398,21 +508,26 @@
     editor.addEventListener('click', () => {
         updateCursorPosition();
     });
-    
+
+    // Debounce cursor updates to avoid flooding the server
+    let cursorUpdateTimeout;
     function updateCursorPosition() {
-        const cursorPos = editor.selectionStart;
-        const text = editor.value.substring(0, cursorPos);
-        const lines = text.split('\n');
-        const row = lines.length - 1;
-        const column = lines[row].length;
-        
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({
-                type: 'cursor_update',
-                userId: userId,
-                position: { row, column }
-            }));
-        }
+        clearTimeout(cursorUpdateTimeout);
+        cursorUpdateTimeout = setTimeout(() => {
+            const cursorPos = editor.selectionStart;
+            const text = editor.value.substring(0, cursorPos);
+            const lines = text.split('\n');
+            const row = lines.length - 1;
+            const column = lines[row].length;
+            
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'cursor_update',
+                    userId: userId,
+                    position: { row, column }
+                }));
+            }
+        }, 50); // Send cursor update every 50ms
     }
     
     languageSelect.addEventListener('change', () => {
@@ -423,18 +538,20 @@
                 userId: userId
             }));
         }
+        // Update example code when language changes
+        editor.value = codeExamples[languageSelect.value] || '';
     });
     
-    // Запуск кода
     runBtn.addEventListener('click', async () => {
         const lang = languageSelect.value;
         const code = editor.value;
         
         output.innerHTML = `
-            <div class="d-flex justify-content-center align-items-center" style="height: 100px;">
+            <div class="text-center p-4">
                 <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
+                    <span class="visually-hidden">Загрузка...</span>
                 </div>
+                <p class="mt-2 text-muted">Выполняем код...</p>
             </div>
         `;
         
@@ -455,39 +572,68 @@
             
             if (result.error) {
                 output.innerHTML = `
-                    <div class="alert alert-danger">
-                        <i class="bi bi-exclamation-triangle-fill"></i> ${result.error}
+                    <div class="alert alert-danger mb-0">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Ошибка: ${result.error}
                     </div>
-                    ${result.output ? `<pre class="bg-light p-3">${result.output}</pre>` : ''}
+                    ${result.output ? `<pre class="bg-dark text-danger p-3 rounded-bottom">${result.output}</pre>` : ''}
                 `;
             } else {
                 output.innerHTML = `
-                    <div class="alert alert-success">
-                        <i class="bi bi-check-circle-fill"></i> Execution successful!
+                    <div class="alert alert-success mb-0">
+                        <i class="bi bi-check-circle-fill"></i> Выполнение успешно!
                     </div>
-                    <pre class="bg-light p-3">${result.output}</pre>
+                    <pre class="bg-dark text-white p-3 rounded-bottom">${result.output}</pre>
                 `;
             }
             
-            // Переключение на вкладку вывода
             new bootstrap.Tab(document.getElementById('output-tab')).show();
         } catch (err) {
             output.innerHTML = `
                 <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle-fill"></i> Connection error: ${err.message}
+                    <i class="bi bi-exclamation-triangle-fill"></i> Ошибка соединения: ${err.message}
                 </div>
             `;
         }
     });
     
-    // Копирование ссылки на сессию
     copyLinkBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(sessionLink.value);
-        const toast = new bootstrap.Toast(document.getElementById('copy-toast'));
-        toast.show();
+        navigator.clipboard.writeText(sessionLink.value).then(() => {
+            showToast('Ссылка скопирована в буфер обмена!', 'success');
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+            showToast('Не удалось скопировать ссылку.', 'danger');
+        });
     });
+
+    // New functionality: Join session via link
+    joinLinkBtn.addEventListener('click', () => {
+        const fullUrl = joinLinkInput.value;
+        try {
+            const url = new URL(fullUrl);
+            const pathSegments = url.pathname.split('/');
+            const potentialSessionId = pathSegments[pathSegments.length - 1]; // Get last segment
+            
+            if (potentialSessionId && potentialSessionId.length === 36 && potentialSessionId.includes('-')) { // Basic UUID check
+                window.location.href = `/session/${potentialSessionId}`;
+            } else {
+                showToast('Неверный формат ссылки на сессию. Убедитесь, что это полная ссылка на сессию.', 'danger');
+            }
+        } catch (e) {
+            showToast('Неверный формат ссылки. Пожалуйста, введите корректный URL.', 'danger');
+            console.error(e);
+        }
+    });
+
+    // Helper for toast messages
+    function showToast(message, category = 'info') {
+        const toastElement = document.getElementById('copy-toast');
+        const toastBody = toastElement.querySelector('.toast-body');
+        toastBody.textContent = message;
+        toastElement.className = `toast align-items-center text-bg-${category} border-0`;
+        const toast = new bootstrap.Toast(toastElement);
+        toast.show();
+    }
     
-    // Запрос истории изменений
     function requestHistory() {
         if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({
@@ -497,51 +643,42 @@
         }
     }
     
-    // Инициализация
     initWebSocket();
     
-    // Примеры кода для разных языков
     const codeExamples = {
-        python: `# Simple Python program
+        python: `# Простой пример на Python
 def greet(name):
-    print(f"Hello, {name}!")
+    print(f"Привет, {name}!")
 
-greet("World")`,
-        cpp: `// Simple C++ program
+greet("Мир")`,
+        cpp: `// Простой пример на C++
 #include <iostream>
-using namespace std;
 
 int main() {
-    cout << "Hello, World!" << endl;
+    std::cout << "Привет, Мир!" << std::endl;
     return 0;
 }`,
-        csharp: `// Simple C# program
+        csharp: `// Простой пример на C#
 using System;
 
 class Program {
     static void Main() {
-        Console.WriteLine("Hello, World!");
+        Console.WriteLine("Привет, Мир!");
     }
 }`,
-        java: `// Simple Java program
+        java: `// Простой пример на Java
 public class Main {
     public static void main(String[] args) {
-        System.out.println("Hello, World!");
+        System.out.println("Привет, Мир!");
     }
 }`,
-        javascript: `// Simple JavaScript program
-console.log("Hello, World!");`
+        javascript: `// Простой пример на JavaScript
+console.log("Привет, Мир!");`
     };
     
-    // Установка примера кода при смене языка
-    languageSelect.addEventListener('change', () => {
-        editor.value = codeExamples[languageSelect.value] || '';
-    });
-    
-    // Инициализация начального языка
+    // Set initial code example based on selected language
     editor.value = codeExamples[languageSelect.value];
     
-    // Запрос истории при открытии вкладки
     document.getElementById('history-tab').addEventListener('click', requestHistory);
 </script>
 {% endblock %}
