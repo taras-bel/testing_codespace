@@ -1,684 +1,86 @@
-{% extends "base.html" %}
-
-{% block title %}Совместный Редактор{% endblock %}
-
-{% block content %}
-<div class="container-fluid d-flex flex-column vh-100 p-0">
-    <div class="session-header d-flex justify-content-between align-items-center bg-dark text-white p-3 rounded-top">
-        <div>
-            <h5 class="mb-0"><i class="bi bi-code-slash me-2"></i>Совместный Редактор Кода</h5>
-            <small class="text-muted">Вы вошли как: <strong>{{ current_user.username }}</strong></small>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeSpace - Главная</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .container {
+            margin-top: 50px;
+        }
+        .card {
+            box-shadow: 0 4px 8px rgba(0,0,0,.05);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <a class="navbar-brand" href="/">CodeSpace</a>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ml-auto">
+                {% if current_user.is_authenticated %}
+                <li class="nav-item">
+                    <span class="nav-link">Привет, {{ current_user.id }}!</span>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('logout') }}">Выйти</a>
+                </li>
+                {% else %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('login') }}">Войти</a>
+                </li>
+                {% endif %}
+            </ul>
         </div>
-        <div class="d-flex align-items-center">
-            <div id="participants" class="me-3 d-flex align-items-center">
-                <span class="me-2 text-white-50">Участники:</span>
-                <div id="participants-list" class="d-flex"></div>
-            </div>
-            
-            {% if current_user.id != session_owner_id %}
-            <form action="{{ url_for('leave_session', session_id=session_id) }}" method="POST" class="me-2">
-                <button type="submit" class="btn btn-sm btn-outline-warning">
-                    <i class="bi bi-door-open"></i> Выйти из сессии
-                </button>
-            </form>
-            {% endif %}
+    </nav>
 
-            <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-info me-2" title="Вернуться к списку сессий">
-                <i class="bi bi-arrow-left-square"></i> К сессиям
-            </a>
-            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-light">
-                <i class="bi bi-box-arrow-right"></i> Выйти из аккаунта
-            </a>
-        </div>
-    </div>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header text-center bg-primary text-white">
+                        <h3>Начать кодировать вместе!</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if error_message %}
+                        <div class="alert alert-danger" role="alert">
+                            {{ error_message }}
+                        </div>
+                        {% endif %}
 
-    <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
-        <div class="d-flex align-items-center">
-            <select id="language" class="form-select form-select-sm me-2" style="width: 130px;">
-                <option value="python">Python</option>
-                <option value="cpp">C++</option>
-                <option value="csharp">C#</option>
-                <option value="java">Java</option>
-                <option value="javascript">JavaScript</option>
-                <option value="go">Go</option>
-                <option value="ruby">Ruby</option>
-                <option value="rust">Rust</option>
-                <option value="php">PHP</option>
-                <option value="swift">Swift</option>
-                <option value="kotlin">Kotlin</option>
-                <option value="scala">Scala</option>
-                <option value="haskell">Haskell</option>
-                <option value="perl">Perl</option>
-                <option value="r">R</option>
-                <option value="bash">Bash</option>
-                <option value="typescript">TypeScript</option>
-                <option value="lua">Lua</option>
-                <option value="dart">Dart</option>
-                <option value="julia">Julia</option>
-            </select>
-            <button id="run-btn" class="btn btn-primary btn-sm me-2"><i class="bi bi-play-fill"></i> Запустить</button>
-            <button id="format-btn" class="btn btn-secondary btn-sm"><i class="bi bi-tools"></i> Форматировать</button>
-        </div>
-        <div class="d-flex align-items-center">
-            {% if current_user.id == session_owner_id %}
-            <div class="input-group input-group-sm me-2" style="width: 200px;">
-                <input type="number" id="timer-duration" class="form-control" placeholder="Мин" min="1" value="15">
-                <button id="set-timer-btn" class="btn btn-outline-info" type="button" title="Установить таймер блокировки сессии">
-                    <i class="bi bi-timer"></i> Уст. таймер
-                </button>
-            </div>
-            {% endif %}
-            
-            <span id="session-timer" class="badge bg-secondary me-3" style="font-size: 1.1em;">
-                <i class="bi bi-hourglass-split"></i> Таймер: --:--
-            </span>
+                        <form action="{{ url_for('new_session') }}" method="POST" class="mb-4">
+                            <div class="form-group">
+                                <label for="languageSelect">Выберите язык:</label>
+                                <select class="form-control" id="languageSelect" name="language">
+                                    {% for lang_key, lang_info in languages.items() %}
+                                    <option value="{{ lang_key }}">{{ lang_info.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-success btn-block">Создать новую сессию</button>
+                        </form>
 
-            <div class="input-group input-group-sm" style="width: 350px;">
-                <input type="text" id="session-link" class="form-control" 
-                       value="{{ url_for('join_session', session_id=session_id, _external=True) }}" readonly>
-                <button id="copy-link-btn" class="btn btn-outline-secondary" type="button" title="Скопировать ссылку на сессию">
-                    <i class="bi bi-clipboard"></i>
-                </button>
+                        <hr>
+
+                        <form action="{{ url_for('join_session') }}" method="POST">
+                            <div class="form-group">
+                                <label for="sessionIdInput">Или присоединиться к существующей сессии по ID:</label>
+                                <input type="text" class="form-control" id="sessionIdInput" name="session_id" placeholder="Введите ID сессии" required>
+                            </div>
+                            <button type="submit" class="btn btn-info btn-block">Присоединиться</button>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="row flex-grow-1 mx-0">
-        <div class="col-md-7 d-flex flex-column px-0">
-            <div class="flex-grow-1 position-relative">
-                <div id="editor" class="border rounded-bottom" style="height: 100%;"></div>
-                <div id="cursor-indicators"></div>
-            </div>
-        </div>
-        <div class="col-md-5 d-flex flex-column px-0">
-            <div class="p-2 bg-dark text-white-50 rounded-bottom-right" style="border-top-left-radius: 0;">Вывод:</div>
-            <pre id="output-content" class="bg-dark text-white flex-grow-1 p-3 overflow-auto rounded-bottom"></pre>
-        </div>
-    </div>
-</div>
-
-<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container"></div>
-
-{% endblock %}
-
-{% block scripts %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js" type="text/javascript" charset="utf-8"></script>
-<script>
-    const sessionId = "{{ session_id }}";
-    const userId = "{{ current_user.id }}";
-    let session_owner_id = "{{ session_owner_id }}"; // This is passed from Flask
-
-    // Initialize Ace Editor
-    const editor = ace.edit("editor");
-    editor.setTheme("ace/theme/tomorrow_night_eighties"); // Default dark theme for editor
-    editor.session.setMode("ace/mode/python");
-    editor.setFontSize(14);
-    editor.setOption("showPrintMargin", false);
-
-    const outputContent = document.getElementById('output-content');
-    const languageSelect = document.getElementById('language');
-    const runBtn = document.getElementById('run-btn');
-    const formatBtn = document.getElementById('format-btn');
-    const copyLinkBtn = document.getElementById('copy-link-btn');
-    const cursorIndicators = document.getElementById('cursor-indicators');
-    const participantsList = document.getElementById('participants-list');
-
-    // WebSocket connection
-    const socket = new WebSocket(`ws://${location.host}/ws/${sessionId}`);
-
-    let participants = {}; // Stores participant data {userId: {name, color}}
-    let userCursors = {}; // Stores {userId: {row, column}}
-
-    // --- Editor Settings and Language Modes ---
-    const languageModes = {
-        python: "ace/mode/python",
-        cpp: "ace/mode/c_cpp",
-        csharp: "ace/mode/csharp",
-        java: "ace/mode/java",
-        javascript: "ace/mode/javascript",
-        go: "ace/mode/golang",
-        ruby: "ace/mode/ruby",
-        rust: "ace/mode/rust",
-        php: "ace/mode/php",
-        swift: "ace/mode/swift",
-        kotlin: "ace/mode/kotlin",
-        scala: "ace/mode/scala",
-        haskell: "ace/mode/haskell",
-        perl: "ace/mode/perl",
-        r: "ace/mode/r",
-        bash: "ace/mode/sh",
-        typescript: "ace/mode/typescript",
-        lua: "ace/mode/lua",
-        dart: "ace/mode/dart",
-        julia: "ace/mode/julia"
-    };
-
-    const codeExamples = {
-        python: `# Простой пример на Python
-def greet(name):
-    print(f"Привет, {name}!")
-
-greet("Мир")`,
-        cpp: `// Простой пример на C++
-#include <iostream>
-
-int main() {
-    std::cout << "Привет, Мир!" << std::endl;
-    return 0;
-}`,
-        csharp: `// Простой пример на C#
-using System;
-
-public class Program
-{
-    public static void Main(string[] args)
-    {
-        Console.WriteLine("Привет, Мир!");
-    }
-}`,
-        java: `// Простой пример на Java
-public class Main {
-    public static void main(String[] args) {
-        System.out.println("Привет, Мир!");
-    }
-}`,
-        javascript: `// Простой пример на JavaScript
-console.log("Привет, Мир!");`,
-        go: `// Простой пример на Go
-package main
-
-import "fmt"
-
-func main() {
-    fmt.Println("Привет, Мир!")
-}`,
-        ruby: `# Простой пример на Ruby
-puts "Привет, Мир!"`,
-        rust: `// Простой пример на Rust
-fn main() {
-    println!("Привет, Мир!");
-}`,
-        php: `<?php
-// Простой пример на PHP
-echo "Привет, Мир!";
-?>`,
-        swift: `// Простой пример на Swift
-import Swift
-print("Привет, Мир!")`,
-        kotlin: `// Простой пример на Kotlin
-fun main() {
-    println("Привет, Мир!")
-}`,
-        scala: `// Простой пример на Scala
-object Main extends App {
-    println("Привет, Мир!")
-}`,
-        haskell: `-- Простой пример на Haskell
-main = putStrLn "Привет, Мир!"`,
-        perl: `# Простой пример на Perl
-print "Привет, Мир!\\n";`,
-        r: `# Простой пример на R
-print("Привет, Мир!")`,
-        bash: `# Простой пример на Bash
-echo "Привет, Мир!"`,
-        typescript: `// Простой пример на TypeScript
-console.log("Привет, Мир!");`,
-        lua: `-- Простой пример на Lua
-print("Привет, Мир!")`,
-        dart: `// Простой пример на Dart
-void main() {
-  print('Привет, Мир!');
-}`,
-        julia: `# Простой пример на Julia
-println("Привет, Мир!")`
-    };
-
-    // --- WebSocket Event Handlers ---
-    socket.onopen = (event) => {
-        console.log("WebSocket connected!");
-    };
-
-    socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        handleWsMessage(sessionId, data);
-    };
-
-    socket.onclose = (event) => {
-        console.log("WebSocket closed:", event);
-        showToast('Соединение с сессией потеряно. Пожалуйста, обновите страницу.', 'danger', 5000);
-        editor.setReadOnly(true); // Disable editing on disconnect
-    };
-
-    socket.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        showToast('Ошибка WebSocket соединения.', 'danger', 5000);
-    };
-
-    function handleWsMessage(session_id, data) {
-        switch(data.type) {
-            case 'init':
-                editor.setValue(data.code, -1); // -1 moves cursor to start
-                languageSelect.value = data.language;
-                editor.session.setMode(languageModes[data.language]);
-                
-                // Initialize participants and display them
-                participants = data.participants;
-                updateParticipantsDisplay();
-                session_owner_id = data.ownerId; // Ensure owner ID is set on init
-                
-                // Initialize timer state
-                sessionEndTime = data.timer_end_time;
-                sessionLocked = data.is_locked;
-                startTimerCountdown();
-                updateEditorLockStatus(); // Apply initial lock status
-                break;
-            case 'code_update':
-                if (data.userId !== userId) { // Only update if change came from another user
-                    const currentCursor = editor.getCursorPosition();
-                    const currentRow = currentCursor.row;
-                    const currentColumn = currentCursor.column;
-
-                    editor.setValue(data.code, -1); // Update code
-                    
-                    // Restore cursor if it hasn't moved beyond bounds of new content
-                    if (currentRow < editor.session.getLength() && currentColumn <= editor.session.getLine(currentRow).length) {
-                         editor.moveCursorTo(currentRow, currentColumn);
-                    }
-                    
-                    // Update other user's cursor
-                    userCursors[data.userId] = data.cursor;
-                    drawCursors();
-                }
-                break;
-            case 'language_update':
-                if (data.userId !== userId) {
-                    languageSelect.value = data.language;
-                    editor.session.setMode(languageModes[data.language]);
-                    showToast(`${participants[data.userId].name} сменил язык на ${data.language}`, 'info');
-                }
-                break;
-            case 'cursor_update':
-                if (data.userId !== userId) {
-                    userCursors[data.userId] = data.cursor;
-                    drawCursors();
-                }
-                break;
-            case 'participant_joined':
-                if (data.userId !== userId) {
-                    participants[data.userId] = data.participant;
-                    updateParticipantsDisplay();
-                    showToast(`${data.participant.name} присоединился к сессии!`, 'success');
-                }
-                break;
-            case 'participant_left':
-                if (data.userId !== userId) {
-                    const participantName = participants[data.userId] ? participants[data.userId].name : 'Неизвестный';
-                    delete participants[data.userId];
-                    delete userCursors[data.userId];
-                    updateParticipantsDisplay();
-                    drawCursors(); // Redraw to remove disconnected user's cursor
-                    showToast(`${participantName} покинул сессию.`, 'info');
-                }
-                break;
-            case 'timer_set':
-                sessionEndTime = data.endTime;
-                sessionLocked = false; // Reset locked status on new timer
-                startTimerCountdown();
-                if (data.ownerId !== userId) { // Notify guests
-                    showToast(`Владелец установил таймер. Сессия будет заблокирована в ${new Date(data.endTime).toLocaleTimeString()}.`, 'info');
-                }
-                break;
-            case 'session_locked':
-                sessionLocked = true;
-                updateEditorLockStatus();
-                if (data.ownerId !== userId) { // Notify guests
-                    showToast('Сессия заблокирована владельцем. Редактирование невозможно.', 'danger');
-                }
-                clearInterval(timerCountdownInterval); // Stop countdown visually
-                sessionTimerDisplay.textContent = 'Таймер: 00:00 (Заблокировано)';
-                break;
-            case 'error':
-                showToast(`Ошибка сервера: ${data.message}`, 'danger');
-                break;
-        }
-    }
-
-    // --- Editor Event Listeners ---
-    editor.session.on('change', () => {
-        if (!editor.readOnly) { // Only send changes if editor is not read-only
-            socket.send(JSON.stringify({
-                type: 'code_change',
-                code: editor.getValue(),
-                cursor: editor.getCursorPosition()
-            }));
-        }
-    });
-
-    editor.session.selection.on('changeCursor', () => {
-        if (!editor.readOnly) { // Only send cursor updates if editor is not read-only
-            socket.send(JSON.stringify({
-                type: 'cursor_update',
-                cursor: editor.getCursorPosition()
-            }));
-        }
-    });
-
-    // Prevent copy, paste, cut for all users
-    editor.addEventListener('paste', (e) => {
-        e.preventDefault();
-        showToast('Вставка кода запрещена. Пожалуйста, набирайте код вручную.', 'danger');
-    });
-
-    editor.addEventListener('copy', (e) => {
-        e.preventDefault();
-        showToast('Копирование кода запрещено.', 'danger');
-    });
-
-    editor.addEventListener('cut', (e) => {
-        e.preventDefault();
-        showToast('Вырезание кода запрещено.', 'danger');
-    });
-
-    // Disable context menu for the editor area
-    editor.container.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-    });
-
-    // --- UI Event Listeners ---
-    languageSelect.addEventListener('change', () => {
-        const newLanguage = languageSelect.value;
-        editor.session.setMode(languageModes[newLanguage]);
-        // Set example code for the new language if editor is empty
-        if (editor.getValue().trim() === '') {
-            editor.setValue(codeExamples[newLanguage] || '', -1);
-        }
-        socket.send(JSON.stringify({
-            type: 'language_change',
-            language: newLanguage
-        }));
-    });
-
-    runBtn.addEventListener('click', async () => {
-        if (runBtn.disabled) return; // Prevent clicks if disabled by lock
-        outputContent.textContent = 'Запуск кода...';
-        try {
-            const response = await fetch('/execute', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    language: languageSelect.value,
-                    code: editor.getValue(),
-                    sessionId: sessionId // Pass session ID to backend
-                })
-            });
-            const result = await response.json();
-            if (result.error) {
-                outputContent.textContent = 'Ошибка:\n' + result.error;
-                outputContent.style.color = 'red';
-            } else {
-                outputContent.textContent = result.output;
-                outputContent.style.color = '#f8f9fa'; // Reset to white for output
-            }
-        } catch (error) {
-            outputContent.textContent = 'Произошла ошибка при выполнении кода.';
-            outputContent.style.color = 'red';
-            console.error('Execution error:', error);
-        }
-    });
-
-    formatBtn.addEventListener('click', () => {
-        // Basic formatting (Ace editor doesn't have built-in comprehensive formatters)
-        // For real formatting, you'd integrate with external formatters (e.g., Prettier, Black)
-        editor.setValue(editor.getValue().trim()); // Simple trim example
-        showToast('Форматирование выполнено (базовое)', 'info');
-    });
-
-    copyLinkBtn.addEventListener('click', () => {
-        const sessionLinkInput = document.getElementById('session-link');
-        sessionLinkInput.select();
-        sessionLinkInput.setSelectionRange(0, 99999); // For mobile devices
-        document.execCommand('copy');
-        showToast('Ссылка скопирована!', 'success');
-    });
-
-    // --- Participant & Cursor Display ---
-    function updateParticipantsDisplay() {
-        participantsList.innerHTML = '';
-        for (const id in participants) {
-            const participant = participants[id];
-            const span = document.createElement('span');
-            span.className = 'badge rounded-pill me-1';
-            span.style.backgroundColor = participant.color;
-            span.textContent = participant.name;
-            if (id === userId) {
-                span.classList.add('border', 'border-white'); // Highlight current user
-            }
-            if (id === session_owner_id) {
-                span.title = 'Владелец сессии';
-                span.innerHTML += ' <i class="bi bi-star-fill" style="font-size: 0.7em;"></i>'; // Star for owner
-            }
-            participantsList.appendChild(span);
-        }
-    }
-
-    function drawCursors() {
-        cursorIndicators.innerHTML = ''; // Clear previous cursors
-        const editorCoords = editor.renderer.getScrollBottomRow(); // Force editor to render lines
-        
-        for (const pId in userCursors) {
-            if (pId === userId) continue; // Don't draw own cursor
-
-            const participant = participants[pId];
-            if (!participant) continue; // Skip if participant data isn't loaded
-
-            const cursor = userCursors[pId];
-            if (!cursor) continue;
-
-            const screenPosition = editor.renderer.textToScreenCoordinates(cursor.row, cursor.column);
-            
-            const cursorDiv = document.createElement('div');
-            cursorDiv.className = 'remote-cursor';
-            cursorDiv.style.left = `${screenPosition.pageX}px`;
-            cursorDiv.style.top = `${screenPosition.pageY}px`;
-            cursorDiv.style.backgroundColor = participant.color;
-            cursorDiv.title = participant.name;
-            cursorIndicators.appendChild(cursorDiv);
-
-            // Optional: add a name label above the cursor
-            const nameLabel = document.createElement('div');
-            nameLabel.className = 'remote-cursor-label';
-            nameLabel.style.left = `${screenPosition.pageX}px`;
-            nameLabel.style.top = `${screenPosition.pageY - 20}px`; // Above the cursor
-            nameLabel.style.backgroundColor = participant.color;
-            nameLabel.textContent = participant.name;
-            cursorIndicators.appendChild(nameLabel);
-        }
-    }
-
-    editor.session.on('changeScrollTop', drawCursors);
-    editor.session.on('changeScrollLeft', drawCursors);
-
-    // --- Typing Speed and Thinking Time Tracking ---
-    let lastKeyPressTime = Date.now();
-    let charactersTypedSinceLastUpdate = 0;
-    let typingInterval;
-    const TYPING_SPEED_UPDATE_INTERVAL_MS = 5000; // Update every 5 seconds
-    const THINKING_PAUSE_THRESHOLD_MS = 2000; // Consider a pause after 2 seconds of inactivity
-
-    editor.addEventListener('keydown', (e) => {
-        // Only track if it's a character input, not control keys like Shift, Alt, Ctrl
-        if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter') {
-            const currentTime = Date.now();
-            const timeSinceLastKey = currentTime - lastKeyPressTime;
-
-            // If there was a significant pause, record it as thinking time
-            if (timeSinceLastKey > THINKING_PAUSE_THRESHOLD_MS) {
-                sendTypingData({ thinkingTime: timeSinceLastKey });
-            }
-            
-            charactersTypedSinceLastUpdate++;
-            lastKeyPressTime = currentTime;
-        }
-    });
-
-    // Start tracking when the user first starts typing or on session init
-    editor.addEventListener('focus', () => {
-        if (!typingInterval) {
-            lastKeyPressTime = Date.now(); // Reset on focus
-            typingInterval = setInterval(sendTypingSpeed, TYPING_SPEED_UPDATE_INTERVAL_MS);
-        }
-    });
-
-    editor.addEventListener('blur', () => {
-        // Optionally stop tracking when editor loses focus
-        clearInterval(typingInterval);
-        typingInterval = null;
-        sendTypingSpeed(); // Send any remaining characters before blur
-    });
-
-    function sendTypingSpeed() {
-        if (charactersTypedSinceLastUpdate > 0) {
-            const timeElapsedSeconds = TYPING_SPEED_UPDATE_INTERVAL_MS / 1000;
-            const cpm = (charactersTypedSinceLastUpdate / timeElapsedSeconds) * 60; // Characters Per Minute
-            sendTypingData({ speed: Math.round(cpm) });
-            charactersTypedSinceLastUpdate = 0;
-        }
-    }
-
-    function sendTypingData(data) {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({
-                type: 'typing_data',
-                userId: userId,
-                ...data
-            }));
-        }
-    }
-
-
-    // --- Timer Functionality ---
-    const timerDurationInput = document.getElementById('timer-duration');
-    const setTimerBtn = document.getElementById('set-timer-btn');
-    const sessionTimerDisplay = document.getElementById('session-timer');
-
-    let sessionEndTime = null; // Will store ISO string of end time
-    let sessionLocked = false;
-    let timerCountdownInterval;
-
-    // Function to update UI based on lock status
-    function updateEditorLockStatus() {
-        const isGuestAndLocked = sessionLocked && userId !== session_owner_id;
-        editor.setReadOnly(isGuestAndLocked);
-        runBtn.disabled = isGuestAndLocked;
-        languageSelect.disabled = isGuestAndLocked;
-        formatBtn.disabled = isGuestAndLocked;
-        if (setTimerBtn) { // Only exists for owner
-            setTimerBtn.disabled = sessionLocked; // Owner can't set new timer if already locked
-            timerDurationInput.disabled = sessionLocked;
-        }
-    }
-
-    function startTimerCountdown() {
-        clearInterval(timerCountdownInterval); // Clear any existing interval
-        if (!sessionEndTime) {
-            sessionTimerDisplay.textContent = 'Таймер: --:--';
-            return;
-        }
-
-        const endTime = new Date(sessionEndTime);
-
-        timerCountdownInterval = setInterval(() => {
-            const now = new Date();
-            const timeLeftMs = endTime.getTime() - now.getTime();
-
-            if (timeLeftMs <= 0) {
-                sessionTimerDisplay.textContent = 'Таймер: 00:00 (Заблокировано)';
-                clearInterval(timerCountdownInterval);
-                sessionLocked = true;
-                updateEditorLockStatus();
-                if (userId !== session_owner_id) {
-                    showToast('Сессия заблокирована владельцем.', 'danger', 5000);
-                }
-            } else {
-                const totalSeconds = Math.floor(timeLeftMs / 1000);
-                const minutes = Math.floor(totalSeconds / 60);
-                const seconds = totalSeconds % 60;
-                const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-                sessionTimerDisplay.textContent = `Таймер: ${formattedTime}`;
-                sessionLocked = false; // Ensure it's not locked while counting down
-                updateEditorLockStatus(); // Update status in case it was locked and then a new timer set
-            }
-        }, 1000);
-    }
-
-    // Event listener for setting the timer (only for owner)
-    if (setTimerBtn) { // Check if element exists (i.e., user is owner)
-        setTimerBtn.addEventListener('click', async () => {
-            const duration = parseInt(timerDurationInput.value, 10);
-            if (isNaN(duration) || duration <= 0) {
-                showToast('Пожалуйста, введите корректную длительность таймера (в минутах).', 'warning');
-                return;
-            }
-
-            try {
-                const response = await fetch(`/session/${sessionId}/set_timer`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ duration_minutes: duration })
-                });
-                const result = await response.json();
-                if (result.success) {
-                    sessionEndTime = result.endTime;
-                    startTimerCountdown();
-                    showToast(`Таймер установлен на ${duration} мин.`, 'success');
-                } else {
-                    showToast(`Ошибка: ${result.error}`, 'danger');
-                }
-            } catch (error) {
-                showToast('Не удалось установить таймер.', 'danger');
-                console.error('Error setting timer:', error);
-            }
-        });
-    }
-
-    // Initial setup for editor language and content (example)
-    const initialLanguage = languageSelect.value;
-    editor.session.setMode(languageModes[initialLanguage]);
-    editor.setValue(codeExamples[initialLanguage], -1); // Set example code initially
-
-</script>
-<style>
-    /* Remote cursor styling */
-    .remote-cursor {
-        position: absolute;
-        width: 2px;
-        height: 1.1em; /* Matches line height */
-        background-color: red; /* Default color */
-        z-index: 10;
-        pointer-events: none; /* Allow clicks to pass through */
-        animation: blink-cursor 1s infinite;
-    }
-
-    .remote-cursor-label {
-        position: absolute;
-        padding: 2px 5px;
-        border-radius: 3px;
-        font-size: 0.7em;
-        color: white;
-        white-space: nowrap;
-        transform: translateX(-50%); /* Center horizontally */
-        z-index: 10;
-        pointer-events: none; /* Allow clicks to pass through */
-    }
-
-    @keyframes blink-cursor {
-        0% { opacity: 1; }
-        50% { opacity: 0; }
-        100% { opacity: 1; }
-    }
-</style>
-{% endblock %}
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
