@@ -1,28 +1,39 @@
-# python_exec.py
 import subprocess
 import os
 import tempfile
 
 def execute_python(code):
     try:
-        with tempfile.NamedTemporaryFile(suffix='.py', delete=False) as f:
-            f.write(code.encode())
-            f.close()
-            result = subprocess.run(
-                ['python', f.name],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            os.unlink(f.name)
-            
-            if result.returncode != 0:
-                return {
-                    'error': f'Python execution failed with return code {result.returncode}',
-                    'output': result.stderr
-                }
+        # Создаем временный файл для записи кода
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.py') as temp_file:
+            temp_file.write(code)
+            temp_file_name = temp_file.name
+
+        # Выполняем Python код с использованием subprocess
+        # Добавляем таймаут, чтобы предотвратить бесконечные циклы
+        result = subprocess.run(
+            ['python', temp_file_name],
+            capture_output=True,
+            text=True,
+            timeout=10  # 10-секундный таймаут
+        )
+
+        # Удаляем временный файл
+        os.unlink(temp_file_name)
+
+        if result.returncode != 0:
+            return {
+                'error': f'Ошибка выполнения (код: {result.returncode})\n{result.stderr}',
+                'output': result.stdout # Иногда stdout может быть даже при ошибке
+            }
+        else:
             return {'output': result.stdout}
     except subprocess.TimeoutExpired:
-        return {'error': 'Execution timed out'}
+        if 'temp_file_name' in locals() and os.path.exists(temp_file_name):
+            os.unlink(temp_file_name)
+        return {'error': 'Выполнение кода превысило лимит времени (10 секунд).'}
     except Exception as e:
-        return {'error': str(e)}
+        if 'temp_file_name' in locals() and os.path.exists(temp_file_name):
+            os.unlink(temp_file_name)
+        return {'error': f'Внутренняя ошибка сервера: {e}'}
+
