@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Управление коллабораторами - {{ session.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Управление коллабораторами сессии "{{ session.title }}"</h2>
+        <a href="{{ url_for('main.session', session_id=session.id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Вернуться в сессию
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="mb-3">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h4>Текущие коллабораторы</h4>
+        </div>
+        <div class="card-body">
+            <ul class="list-group">
+                {% for role_entry, user_obj in collaborators %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ user_obj.username }}</strong> 
+                            <span class="badge bg-info text-dark ms-2">{{ role_entry.role }}</span>
+                        </div>
+                        <form action="{{ url_for('main.manage_collaborators', session_id=session.id) }}" method="POST" class="d-flex align-items-center">
+                            <input type="hidden" name="user_id" value="{{ user_obj.id }}">
+                            <input type="hidden" name="action" value="update_role">
+                            <select name="new_role" class="form-select form-select-sm me-2" style="width: 120px;">
+                                <option value="viewer" {% if role_entry.role == 'viewer' %}selected{% endif %}>Зритель</option>
+                                <option value="editor" {% if role_entry.role == 'editor' %}selected{% endif %}>Редактор</option>
+                            </select>
+                            <button type="submit" class="btn btn-primary btn-sm me-2">Обновить роль</button>
+                            
+                            <button type="submit" name="action" value="remove_collaborator" class="btn btn-danger btn-sm"
+                                    onclick="return confirm('Вы уверены, что хотите удалить {{ user_obj.username }} из этой сессии?');">
+                                Удалить
+                            </button>
+                        </form>
+                    </li>
+                {% else %}
+                    <li class="list-group-item">Нет других коллабораторов.</li>
+                {% endfor %}
+                <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                    <div>
+                        <strong>{{ session.owner.username }}</strong>
+                        <span class="badge bg-success ms-2">owner</span>
+                    </div>
+                    <span class="text-muted">(Владелец сессии - его роль не может быть изменена или удалена)</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h4>Добавить нового коллаборатора</h4>
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('main.manage_collaborators', session_id=session.id) }}" method="POST">
+                <input type="hidden" name="action" value="add_collaborator">
+                <div class="mb-3">
+                    <label for="username_to_add" class="form-label">Имя пользователя:</label>
+                    <input type="text" class="form-control" id="username_to_add" name="username_to_add" required>
+                </div>
+                <div class="mb-3">
+                    <label for="role_to_add" class="form-label">Роль:</label>
+                    <select name="role_to_add" id="role_to_add" class="form-select">
+                        <option value="viewer">Зритель</option>
+                        <option value="editor">Редактор</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-success">Добавить коллаборатора</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

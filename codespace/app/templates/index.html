@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Главная - CodeShare{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="text-center">
+        <h1 class="display-4 text-white">Добро пожаловать в CodeShare!</h1>
+        <p class="lead text-codespace-text-muted">Совместное редактирование кода в реальном времени.</p>
+        {% if current_user.is_authenticated %}
+            <form action="{{ url_for('main.create_session') }}" method="POST">
+                <button type="submit" class="btn btn-codespace-primary btn-lg mt-3">
+                    <i class="bi bi-plus-circle-fill"></i> Создать новую сессию
+                </button>
+            </form>
+
+            <h2 class="text-white mt-5">Ваши сессии:</h2>
+            {% if user_sessions %}
+                <ul class="list-group list-group-flush mt-3 text-start">
+                    {% for session in user_sessions %}
+                        <li class="list-group-item bg-codespace-darker border-codespace-border d-flex justify-content-between align-items-center text-codespace-text">
+                            <span>
+                                ID: <span class="fw-bold">{{ session.id }}</span> (Язык: {{ session.language }})
+                                <small class="text-codespace-text-muted ms-3">Создано: {{ session.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                {% if session.editing_locked %}
+                                    <span class="badge bg-danger ms-2">Заблокировано</span>
+                                {% endif %}
+                                {% if session.timer_duration %}
+                                    <span class="badge bg-info ms-2">Таймер: {{ session.timer_duration }} мин</span>
+                                {% endif %}
+                            </span>
+                            <a href="{{ url_for('main.editor', session_id=session.id) }}" class="btn btn-codespace-secondary btn-sm">
+                                <i class="bi bi-box-arrow-in-right"></i> Перейти
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-codespace-text-muted">У вас пока нет активных сессий. Создайте новую!</p>
+            {% endif %}
+
+        {% else %}
+            <p class="text-codespace-text-muted">Пожалуйста, <a href="{{ url_for('auth.login') }}" class="text-codespace-primary">войдите</a> или <a href="{{ url_for('auth.register') }}" class="text-codespace-primary">зарегистрируйтесь</a>, чтобы начать.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

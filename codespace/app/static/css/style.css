@@ -1,0 +1,700 @@
+/* Base Styles - Общие стили */
+:root {
+    --primary-color: #007aff; /* Apple Blue - Основной акцентный цвет */
+    --primary-hover-color: #0056b3; /* Более темный синий при наведении */
+    --secondary-color: #e0e0e0; /* Светло-серый для второстепенных элементов */
+    --secondary-hover-color: #d0d0d0; /* Чуть темнее серый при наведении */
+    --text-color: #333; /* Основной цвет текста */
+    --text-color-light: #666; /* Светлый цвет текста для мета-информации */
+    --background-color: #f5f5f7; /* Цвет фона страницы (почти белый) */
+    --card-background: #ffffff; /* Цвет фона для карточек и панелей */
+    --border-color: #e6e6e6; /* Цвет границ */
+    --danger-color: #dc3545; /* Красный для ошибок/удаления */
+    --success-color: #28a745; /* Зеленый для успеха */
+    --info-color: #17a2b8; /* Синий для информации */
+    --warning-color: #ffc107; /* Желтый для предупреждений */
+
+    --font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+    --font-size-base: 16px;
+    --line-height-base: 1.6;
+    --border-radius: 8px; /* Скругление углов для всех элементов */
+    --shadow-light: 0 1px 3px rgba(0,0,0,0.08); /* Легкая тень */
+    --shadow-medium: 0 4px 12px rgba(0,0,0,0.1); /* Средняя тень для карточек */
+}
+
+body {
+    font-family: var(--font-family-sans);
+    line-height: var(--line-height-base);
+    color: var(--text-color);
+    background-color: var(--background-color);
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased; /* Сглаживание шрифтов для лучшей читаемости */
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.container {
+    max-width: 1200px; /* Ограничиваем ширину основного контента */
+    margin: 0 auto; /* Выравниваем по центру */
+    padding: 20px;
+}
+
+/* Typography - Типографика */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-color);
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-weight: 600; /* Полужирный */
+}
+
+h1 { font-size: 2.2em; }
+h2 { font-size: 1.8em; }
+h3 { font-size: 1.4em; }
+
+a {
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: color 0.2s ease-in-out; /* Плавный переход цвета при наведении */
+}
+
+a:hover {
+    color: var(--primary-hover-color);
+}
+
+/* Navbar - Верхняя навигационная панель */
+.navbar {
+    background-color: var(--card-background);
+    border-bottom: 1px solid var(--border-color);
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow-light);
+}
+
+.navbar-brand {
+    font-size: 1.5em;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    /* Убрано свойство color: var(--text-color);, так как оно переопределяется в общих стилях */
+}
+
+.navbar-brand a {
+    color: var(--text-color); /* Сохраняем цвет текста для ссылки внутри бренда */
+}
+
+.navbar-nav a {
+    margin-left: 20px;
+    font-weight: 500;
+    padding: 8px 12px;
+    border-radius: var(--border-radius);
+}
+
+.navbar-user {
+    margin-left: 20px;
+    font-weight: 500;
+    color: var(--text-color-light);
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Расстояние между именем пользователя и иконкой */
+}
+
+/* Buttons - Кнопки */
+.btn {
+    padding: 10px 18px;
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px; /* Расстояние между текстом и иконкой */
+    text-decoration: none; /* Убираем подчеркивание для кнопок-ссылок */
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover-color);
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+}
+
+.btn-secondary:hover {
+    background-color: var(--secondary-hover-color);
+}
+
+.btn-success {
+    background-color: var(--success-color);
+    color: #fff;
+}
+.btn-success:hover {
+    background-color: #218838;
+}
+
+.btn-danger {
+    background-color: var(--danger-color);
+    color: #fff;
+}
+.btn-danger:hover {
+    background-color: #c82333;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 0.9em;
+}
+
+.btn-icon {
+    padding: 8px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%; /* Круглые иконки */
+    background-color: transparent; /* Прозрачный фон для кнопок-иконок */
+    color: var(--text-color-light);
+}
+.btn-icon:hover {
+    background-color: var(--secondary-color);
+}
+.btn-icon i {
+    font-size: 1.1em;
+}
+
+.btn-full-width {
+    width: 100%;
+    margin-top: 20px;
+}
+
+/* Forms - Формы */
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: var(--text-color-light);
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 1em;
+    box-sizing: border-box; /* Учитываем padding и border в ширине */
+    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.25); /* Эффект свечения при фокусе */
+}
+
+/* Checkbox specific styles */
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Space between checkbox and label */
+    margin-top: 15px;
+}
+
+.checkbox-group .form-check-input {
+    width: auto; /* Allow checkbox to take its natural width */
+    margin-right: 0; /* Reset default margin */
+}
+
+.checkbox-group .form-check-label {
+    margin-bottom: 0; /* Reset label default margin */
+    font-weight: normal; /* Normal weight for checkbox label */
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+
+/* Alerts / Flash Messages - Сообщения-уведомления */
+.flash-messages {
+    margin-top: 20px;
+    padding: 0 20px; /* Добавлено padding для сообщений, если они не в .container */
+}
+.alert {
+    padding: 15px 20px;
+    margin-bottom: 15px;
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    border: 1px solid transparent;
+}
+
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-color: #f5c6cb;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border-color: #ffeeba;
+}
+
+.alert-info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border-color: #bee5eb;
+}
+
+/* Footer - Нижний колонтитул */
+.footer {
+    text-align: center;
+    padding: 20px;
+    margin-top: 40px;
+    color: var(--text-color-light);
+    font-size: 0.9em;
+    border-top: 1px solid var(--border-color);
+}
+
+/* --- Auth Card Specific Styles (Login/Register) --- */
+.auth-card {
+    background-color: var(--card-background);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-medium);
+    padding: 30px;
+    max-width: 400px;
+    margin: 60px auto; /* Центрируем карточку */
+    text-align: center;
+}
+
+.auth-card-title {
+    font-size: 1.8em;
+    margin-bottom: 25px;
+    color: var(--text-color);
+}
+
+.auth-card .form-group {
+    text-align: left; /* Выравниваем метки и поля ввода по левому краю внутри карточки */
+}
+
+.auth-card-footer {
+    margin-top: 25px;
+    font-size: 0.95em;
+    color: var(--text-color-light);
+}
+
+.auth-card-footer a {
+    font-weight: 500;
+}
+
+/* --- Dashboard Specific Styles --- */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.dashboard-sections {
+    display: grid;
+    gap: 30px;
+}
+
+.section {
+    background-color: var(--card-background);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-medium);
+    padding: 25px;
+}
+
+.session-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* Адаптивная сетка */
+    gap: 20px;
+}
+
+.session-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 180px;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.session-card:hover {
+    transform: translateY(-5px); /* Легкое поднятие при наведении */
+    box-shadow: var(--shadow-medium);
+}
+
+.session-card h3 {
+    margin-bottom: 10px;
+    font-size: 1.2em;
+}
+
+.session-card h3 a {
+    color: var(--text-color);
+}
+.session-card h3 a:hover {
+    color: var(--primary-color);
+}
+
+.session-card .description {
+    font-size: 0.9em;
+    color: var(--text-color-light);
+    margin-bottom: 15px;
+    flex-grow: 1; /* Описание может занимать доступное пространство */
+}
+
+.session-card .meta-info {
+    font-size: 0.85em;
+    color: var(--text-color-light);
+    margin-bottom: 15px;
+    display: flex;
+    flex-wrap: wrap; /* Перенос элементов на новую строку при необходимости */
+    gap: 10px;
+}
+
+.session-card .meta-info span i {
+    margin-right: 5px;
+    color: var(--primary-color);
+}
+
+.session-card .card-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* --- Editor Specific Styles --- */
+/* Monaco Editor's root container */
+#editor {
+    border: 1px solid #ccc; /* Базовая граница для контейнера редактора */
+    border-radius: 5px; /* Скругление углов */
+    overflow: hidden; /* Обрезаем содержимое, чтобы не выходило за границы */
+    /* Дополнительные стили для контейнера редактора, если нужно */
+}
+
+/* Output Area */
+#outputContent {
+    background-color: #212529; /* Темный фон для вывода кода */
+    color: #0f0; /* Зеленый текст по умолчанию */
+    padding: 15px;
+    border-radius: 5px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    min-height: 100px;
+    overflow-x: auto; /* Позволяем горизонтальную прокрутку для длинных строк */
+}
+
+/* Chat Styling */
+.chat-messages {
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    padding: 10px;
+    min-height: 100px;
+}
+
+.chat-message {
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.chat-message strong {
+    color: #007bff;
+}
+
+.chat-message .timestamp {
+    font-size: 0.75em;
+    color: #6c757d;
+    margin-left: 5px;
+}
+
+/* File List Styling */
+.file-item {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.file-item:hover {
+    background-color: #f0f0f0;
+}
+
+.file-item.active {
+    background-color: #e9f5ff; /* Светло-голубой фон для активного файла */
+    font-weight: 600;
+    border-left: 3px solid #007bff; /* Подсветка активного файла */
+}
+
+.file-item .badge {
+    font-size: 0.75em;
+    margin-left: 5px;
+}
+
+/* Collaborator Cursors and Labels (Monaco Editor) */
+/* Это стили для линии курсора, цвет будет устанавливаться динамически через JS */
+.monaco-editor [class^="collaborator-cursor-"] {
+    border-left: 2px solid; /* Цвет будет установлен динамически */
+    background-color: transparent; /* Небольшая подсветка на линии */
+    opacity: 0.8; /* Слегка прозрачный */
+}
+
+/* Это стили для плавающей метки над курсором */
+.monaco-editor .collaborator-cursor-label::before {
+    /* Содержимое, цвет фона и границы будут устанавливаться динамически через JS */
+    position: absolute;
+    top: -1.5em; /* Позиция над линией курсора */
+    left: 0; /* Выравнивание с курсором */
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    white-space: nowrap;
+    z-index: 100; /* Убедитесь, что он находится над кодом */
+    transform: translateX(-50%); /* Центрирование метки по горизонтали относительно курсора */
+    color: white; /* Цвет текста метки */
+    pointer-events: none; /* Не должен мешать взаимодействию с редактором */
+    line-height: 1; /* Отрегулировать высоту строки для метки */
+    display: inline-block; /* Требуется для transform */
+}
+
+/* Custom Alert for Copying Session ID */
+.fixed-top.alert {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
+    min-width: 250px;
+    max-width: 90%;
+    z-index: 1050;
+    text-align: center;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    border-radius: 8px;
+}
+
+/* Dashboard specific styles */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding: 20px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.dashboard-header h1 {
+    font-size: 2.5em;
+    color: #343a40;
+    margin: 0;
+}
+
+.dashboard-sections {
+    margin-top: 30px;
+}
+
+.section {
+    margin-bottom: 40px;
+}
+
+.section h2 {
+    font-size: 1.8em;
+    color: #495057;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 10px;
+    display: inline-block;
+}
+
+.session-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.session-card {
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.2s ease-in-out;
+}
+
+.session-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+}
+
+.session-card h3 {
+    font-size: 1.5em;
+    margin-bottom: 10px;
+    color: #007bff;
+}
+
+.session-card h3 a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.session-card p.description {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-bottom: 15px;
+    flex-grow: 1; /* Allows description to take up available space */
+}
+
+.session-card .meta-info {
+    font-size: 0.85em;
+    color: #888;
+    margin-bottom: 15px;
+}
+
+.session-card .meta-info span {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.session-card .meta-info i {
+    margin-right: 5px;
+    color: #007bff;
+}
+
+.session-card .card-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+}
+
+.session-card .card-actions .btn-small {
+    padding: 5px 10px;
+    font-size: 0.8em;
+}
+
+/* Auth card styling (for login/register/create session forms) */
+.auth-card {
+    max-width: 500px;
+    margin: 50px auto;
+    padding: 30px;
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.auth-card-title {
+    font-size: 2em;
+    color: #343a40;
+    margin-bottom: 30px;
+}
+
+.auth-card .form-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.auth-card .form-group label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    display: block;
+    color: #555;
+}
+
+.auth-card .form-control {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    font-size: 1em;
+}
+
+.auth-card .btn-full-width {
+    width: 100%;
+    padding: 12px;
+    font-size: 1.1em;
+    margin-top: 20px;
+}
+
+.auth-card-footer {
+    margin-top: 30px;
+    font-size: 0.9em;
+}
+
+.auth-card-footer a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.auth-card-footer a:hover {
+    text-decoration: underline;
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+    .editor-layout {
+        flex-direction: column; /* On small screens, sidebar will be on top */
+        height: auto; /* Automatic height */
+    }
+    .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0;
+    }
+    .editor-main-content {
+        padding-top: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .navbar-nav {
+        margin-top: 10px;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .navbar-nav a, .navbar-user {
+        margin-left: 0;
+        margin-bottom: 10px;
+    }
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+    .session-grid {
+        grid-template-columns: 1fr; /* One column on mobile */
+    }
+    .auth-card {
+        margin: 20px 15px;
+        padding: 20px;
+    }
+}

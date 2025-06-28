@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}Сессия: {{ session.title }} | CodeShare{% endblock %}
+
+{% block head_extra %}
+{{ super() }}
+<style>
+    /* Editor layout */
+    .editor-container {
+        width: 100%;
+        height: 60vh;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 0.25rem;
+    }
+    
+    /* File list */
+    .file-item {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .file-item:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    
+    .file-item.active {
+        background-color: var(--bs-primary-bg-subtle);
+    }
+    
+    /* Participants */
+    .participant-role {
+        font-size: 0.8em;
+        padding: 0.15em 0.4em;
+        border-radius: 0.25rem;
+    }
+    
+    .participant-role.owner {
+        background-color: var(--bs-success-bg-subtle);
+        color: var(--bs-success-text);
+    }
+    
+    .participant-role.editor {
+        background-color: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary-text);
+    }
+    
+    /* Output panel */
+    #output-panel {
+        font-family: monospace;
+        white-space: pre-wrap;
+        background-color: var(--bs-tertiary-bg);
+        padding: 1rem;
+        border-radius: 0.25rem;
+        max-height: 20vh;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="row g-3">
+        <!-- Sidebar -->
+        <div class="col-lg-3">
+            <!-- Session info card -->
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ session.title }}</h5>
+                    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#sessionDetails">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+                <div class="collapse show" id="sessionDetails">
+                    <div class="card-body">
+                        <p class="mb-1"><strong>Владелец:</strong> {{ session.owner.username }}</p>
+                        <p class="mb-1"><strong>Статус:</strong> 
+                            <span class="badge bg-{% if session.is_active %}success{% else %}secondary{% endif %}">
+                                {% if session.is_active %}Активна{% else %}Завершена{% endif %}
+                            </span>
+                        </p>
+                        <p class="mb-1"><strong>Язык:</strong> {{ languages[session.language].name }}</p>
+                        <p class="mb-1"><strong>Создана:</strong> {{ session.created_at|datetime_format }}</p>
+                        
+                        {% if current_user.id == session.owner.id %}
+                        <hr>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#inviteModal">
+                                <i class="fas fa-user-plus me-1"></i> Пригласить
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" id="toggleLockBtn">
+                                <i class="fas fa-lock me-1"></i> Заблокировать
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Files card -->
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Файлы</h5>
+                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newFileModal">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <div class="list-group list-group-flush" id="fileList">
+                    {% for file in files %}
+                    <a href="#" class="list-group-item list-group-item-action file-item {% if file.id == active_file.id %}active{% endif %}"
+                       data-file-id="{{ file.id }}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>{{ file.name }}</span>
+                            <span class="badge bg-secondary">{{ file.language }}</span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Participants card -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Участники</h5>
+                </div>
+                <div class="list-group list-group-flush" id="participantsList">
+                    {% for participant in participants %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="participant-role {{ participant.role }}">{{ participant.role }}</span>
+                                <strong class="ms-2">{{ participant.username }}</strong>
+                                {% if participant.id == current_user.id %}<span class="text-muted ms-2">(Вы)</span>{% endif %}
+                            </div>
+                            {% if current_user.id == session.owner.id and participant.id != current_user.id %}
+                            <button class="btn btn-sm btn-outline-danger remove-user" data-user-id="{{ participant.id }}">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main editor area -->
+        <div class="col-lg-9">
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <span id="currentFileName" class="fw-bold">{{ active_file.name }}</span>
+                        <span class="badge bg-info ms-2">Ваша роль: {{ current_user_role }}</span>
+                    </div>
+                    <div class="d-flex">
+                        <select id="languageSelect" class="form-select form-select-sm me-2">
+                            {% for lang_code, lang_data in languages.items() %}
+                            <option value="{{ lang_code }}" {% if lang_code == active_file.language %}selected{% endif %}>
+                                {{ lang_data.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button id="runCodeBtn" class="btn btn-sm btn-success me-2">
+                            <i class="fas fa-play me-1"></i> Выполнить
+                        </button>
+                        <button id="saveCodeBtn" class="btn btn-sm btn-primary">
+                            <i class="fas fa-save me-1"></i> Сохранить
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="editor-container" 
+                         data-session-id="{{ session.id }}"
+                         data-user-id="{{ current_user.id }}"
+                         data-username="{{ current_user.username }}"
+                         data-user-role="{{ current_user_role }}"
+                         data-initial-content="{{ active_file.content|escape }}"
+                         data-initial-language="{{ active_file.language }}"
+                         class="editor-container"></div>
+                </div>
+            </div>
+            
+            <!-- Output panel -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">Вывод</h5>
+                </div>
+                <div class="card-body p-0">
+                    <pre id="outputPanel" class="p-3 mb-0">{{ session.last_output or "Здесь будет отображаться результат выполнения кода..." }}</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New File Modal -->
+<div class="modal fade" id="newFileModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Новый файл</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="newFileForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="fileName" class="form-label">Имя файла</label>
+                        <input type="text" class="form-control" id="fileName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="fileLanguage" class="form-label">Язык</label>
+                        <select class="form-select" id="fileLanguage" required>
+                            {% for lang_code, lang_data in languages.items() %}
+                            <option value="{{ lang_code }}">{{ lang_data.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Invite Modal -->
+<div class="modal fade" id="inviteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Пригласить участника</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Ссылка для приглашения</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="inviteLink" 
+                               value="{{ url_for('main.join_session', session_id=session.id, _external=True) }}" readonly>
+                        <button class="btn btn-outline-secondary" id="copyInviteLink">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Отправьте эту ссылку пользователям, которых хотите пригласить в сессию
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+    // Initialize editor with session data
+    document.addEventListener('DOMContentLoaded', function() {
+        const editor = new CodeShareEditor();
+        window.editorInstance = editor;
+        editor.init();
+        
+        // Copy invite link functionality
+        document.getElementById('copyInviteLink').addEventListener('click', function() {
+            const linkInput = document.getElementById('inviteLink');
+            linkInput.select();
+            document.execCommand('copy');
+            
+            // Show toast notification
+            const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+            toast.show();
+        });
+    });
+</script>
+{% endblock %}

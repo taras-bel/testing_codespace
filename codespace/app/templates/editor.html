@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}{{ session.title }} - CodeShare Editor{% endblock %}
+
+{% block head_extra %}
+<!-- Загружаем Monaco Editor -->
+<script>
+    var require = { paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.40.0/min/vs' }};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.40.0/min/vs/loader.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+<style>
+    .monaco-editor {
+        background-color: #ffffff !important;
+    }
+    .monaco-editor .margin {
+        background-color: #f5f5f5 !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="editor-layout">
+    <div class="sidebar">
+        <div class="session-info">
+            <h2>{{ session.title }}</h2>
+            <p>{{ session.description }}</p>
+            <p>Владелец: <strong>{{ session.owner.username }}</strong></p>
+            <p>Ваша роль: <strong>{{ current_user_role | capitalize }}</strong></p>
+            <hr>
+            {% if session.owner_id == current_user.id %}
+            <div class="owner-controls">
+                <h3>Настройки сессии</h3>
+                <div class="control-group">
+                    <label for="visibility-select">Видимость:</label>
+                    <select id="visibility-select" class="form-control">
+                        <option value="private" {% if session.visibility == 'private' %}selected{% endif %}>Приватная</option>
+                        <option value="public" {% if session.visibility == 'public' %}selected{% endif %}>Публичная</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <button id="toggle-lock-btn" class="btn btn-secondary btn-small">
+                        {% if session.editing_locked %}<i class="fas fa-lock-open"></i> Разблокировать{% else %}<i class="fas fa-lock"></i> Заблокировать редактирование{% endif %}
+                    </button>
+                    <span class="status-indicator {% if session.editing_locked %}locked{% else %}unlocked{% endif %}" id="editing-status">
+                        {% if session.editing_locked %}Заблокировано{% else %}Разблокировано{% endif %}
+                    </span>
+                </div>
+                <div class="control-group">
+                    <label for="timer-duration">Таймер (мин):</label>
+                    <input type="number" id="timer-duration" value="{{ session.timer_duration or 60 }}" min="1" class="form-control" style="width: 80px;">
+                    <button id="start-timer-btn" class="btn btn-secondary btn-small" {% if session.timer_started_at %}disabled{% endif %}>
+                        <i class="fas fa-hourglass-start"></i> Запустить таймер
+                    </button>
+                </div>
+                <div id="timer-display" class="timer-display">
+                    {% if session.timer_started_at %}
+                        Таймер: <span id="time-remaining"></span>
+                    {% else %}
+                        Таймер не запущен
+                    {% endif %}
+                </div>
+                <hr>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="files-panel">
+            <h3>Файлы <button id="add-file-btn" class="btn btn-icon btn-small" title="Добавить файл"><i class="fas fa-plus"></i></button></h3>
+            <ul id="file-list" class="file-list">
+                {% for file in initial_files %}
+                <li data-file-id="{{ file.id }}" data-file-language="{{ file.language }}" class="{{ 'active' if loop.index0 == 0 else '' }}">
+                    <span class="file-name {% if file.is_main %}main-file{% endif %}">{{ file.name }}</span>
+                    <div class="file-actions">
+                        {% if session.owner_id == current_user.id and not file.is_main %}
+                        <button class="btn btn-icon btn-small set-main-file-btn" title="Сделать основным"><i class="fas fa-star"></i></button>
+                        <button class="btn btn-icon btn-small delete-file-btn" title="Удалить файл"><i class="fas fa-trash-alt"></i></button>
+                        {% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="participants-panel">
+            <h3>Участники (<span id="participants-count">0</span>)</h3>
+            <ul id="participants-list" class="participants-list">
+                <!-- Participants will be loaded here by JS -->
+            </ul>
+        </div>
+
+        <div class="chat-panel">
+            <h3>Чат</h3>
+            <div id="chat-messages" class="chat-messages">
+                <!-- Chat messages will be loaded here by JS -->
+            </div>
+            <div class="chat-input">
+                <input type="text" id="chat-input" placeholder="Введите сообщение...">
+                <button id="send-message-btn" class="btn btn-primary"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="editor-main-content">
+        <div class="editor-controls">
+            <div class="left-controls">
+                <span id="current-file-display" class="current-file-display"></span>
+                <select id="language-select" class="form-control">
+                    {% for key, lang in languages.items() %}
+                    <option value="{{ key }}" data-mode="{{ lang.mode }}">{{ lang.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="right-controls">
+                <button id="run-code-btn" class="btn btn-success"><i class="fas fa-play"></i> Запустить</button>
+            </div>
+        </div>
+        <div id="editor-container" class="code-editor" style="width: 100%; height: 500px; border: 1px solid #ddd;"></div>
+        <div class="output-panel">
+            <h3>Вывод</h3>
+            <pre id="output-content" class="output-content"></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+    <script>
+        window.flaskData = {
+            sessionId: "{{ session.id }}",
+            currentUserId: "{{ current_user.id }}",
+            currentUsername: "{{ current_user.username }}",
+            initialFiles: JSON.parse('{{ initial_files | tojson | safe }}'),
+            currentUserRole: "{{ current_user_role }}",
+            initialEditingLocked: "{{ 'true' if session.editing_locked else 'false' }}",
+            initialTimerStartedAt: "{{ session.timer_started_at.isoformat() if session.timer_started_at else '' }}",
+            initialTimerDuration: "{{ session.timer_duration or 'null' }}",
+            languages: JSON.parse('{{ languages | tojson | safe }}'),
+            initialContent: "{{ active_file.content | tojson | safe if active_file else ' '}}",
+            initialLanguage: "{{ active_file.language if active_file else 'plaintext' }}"
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/editor.js') }}"></script>
+{% endblock %}
