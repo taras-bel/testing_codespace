@@ -1,0 +1,10 @@
+#output-panel {
+  background: #f8f8f8;
+  color: #222;
+  padding: 1rem;
+  border-radius: 10px;
+  display: none;
+}
+#output-panel.visible {
+  display: block;
+}

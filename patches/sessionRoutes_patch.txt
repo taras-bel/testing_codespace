@@ -1,0 +1,2 @@
+// PATCH: routes/sessionRoutes.js
+router.post('/change-role', authenticate, changeUserRole);

@@ -1,0 +1,1 @@
+console.log('All plugin UIs load properly if script is connected.');

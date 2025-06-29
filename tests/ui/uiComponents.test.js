@@ -1,0 +1,1 @@
+console.log('Modal and Toast components are testable in browser only');

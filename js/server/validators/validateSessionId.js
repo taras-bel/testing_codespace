@@ -1,0 +1,1 @@
+module.exports = id => /^[a-f\d]{24}$/.test(id);

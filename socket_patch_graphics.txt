@@ -1,0 +1,13 @@
+// В socket.js дополняем обработку:
+socket.on('graphics:draw', ({ x, y }) => {
+  const sessionId = socket.handshake.sessionId || 'global';
+  io.emit('graphics:update', { x, y });
+
+  const userId = socket.user._id.toString();
+  const log = `**User:** ${userId} — _canvas point_ (${x}, ${y})`;
+  const { logToFile } = require('./utils/logger');
+  logToFile(sessionId, log);
+
+  const { createBlock } = require('./utils/blockchain');
+  createBlock(sessionId, userId, 'graphics:draw', `(${x}, ${y})`);
+});

@@ -1,0 +1,1 @@
+console.log('Upload middleware and image routes should be tested via HTTP client.');

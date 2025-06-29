@@ -1,0 +1,1 @@
+module.exports = code => typeof code === 'string' && code.length < 10000;

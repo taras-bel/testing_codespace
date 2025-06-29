@@ -1,0 +1,1 @@
+module.exports = name => /^[\w\-\.]{1,100}$/.test(name);

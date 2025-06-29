@@ -1,0 +1,28 @@
+<% if (user._id.toString() === session.owner.toString()) { %>
+  <form id="role-form">
+    <select name="userId" id="userIdSelect">
+      <% session.users.forEach(u => { %>
+        <option value="<%= u.user._id %>"><%= u.user.email %></option>
+      <% }) %>
+    </select>
+    <select name="newRole" id="roleSelect">
+      <option value="viewer">Viewer</option>
+      <option value="editor">Editor</option>
+    </select>
+    <button type="submit">Change Role</button>
+  </form>
+  <script>
+    document.getElementById('role-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const userId = document.getElementById('userIdSelect').value;
+      const newRole = document.getElementById('roleSelect').value;
+      const res = await fetch('/api/session/change-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: "<%= session._id %>", userId, newRole })
+      });
+      const json = await res.json();
+      alert(json.message);
+    });
+  </script>
+<% } %>

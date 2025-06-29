@@ -1,0 +1,1 @@
+console.log('Visual functions should be tested in-browser with UI event simulations.');
