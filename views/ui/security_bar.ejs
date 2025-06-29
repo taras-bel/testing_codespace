@@ -1,0 +1,4 @@
+<div id="security-bar" style="padding:5px;background:#eee;border-top:1px solid #ccc;">
+  <span>User Role: <b><%= role %></b></span> |
+  <span>Status: <b style="color:<%= role === 'owner' ? 'green' : 'gray' %>"><%= role === 'owner' ? 'Editable' : 'Read-only' %></b></span>
+</div>

@@ -1,0 +1,11 @@
+<div class="language-switch">
+  <form method="get" action="">
+    <select name="lang" onchange="this.form.submit()">
+      <option value="en" <% if (lang === 'en') { %>selected<% } %>>EN</option>
+      <option value="ru" <% if (lang === 'ru') { %>selected<% } %>>RU</option>
+      <option value="de" <% if (lang === 'de') { %>selected<% } %>>DE</option>
+      <option value="es" <% if (lang === 'es') { %>selected<% } %>>ES</option>
+      <option value="fr" <% if (lang === 'fr') { %>selected<% } %>>FR</option>
+    </select>
+  </form>
+</div>
